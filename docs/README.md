@@ -6,6 +6,7 @@ Esta pasta contém toda a documentação técnica do sistema de controle de aces
 
 - **[migration-supabase.md](./migration-supabase.md)** - Documentação completa da migração para Supabase e implementação de reconhecimento facial
 - **[acesso-publico.md](./acesso-publico.md)** - Documentação do acesso público por reconhecimento facial (sem login)
+- **[rls-policies.md](./rls-policies.md)** - Documentação das políticas RLS (Row Level Security) e controle de acesso por roles
 
 ## Estrutura da Documentação
 

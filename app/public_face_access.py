@@ -3,13 +3,13 @@ Página PÚBLICA de acesso por reconhecimento facial
 Acesso sem login - pessoa tira foto e é liberada ou bloqueada automaticamente
 """
 import streamlit as st
-from app.supabase_db import SupabaseOperations
+from app.supabase_public_client import SupabasePublicClient
 from app.face_recognition_utils import (
     is_face_recognition_available,
     find_matching_person,
     process_uploaded_image
 )
-from app.data_operations import add_record, is_entity_blocked
+# is_entity_blocked será implementado no cliente público
 from app.utils import get_sao_paulo_time, clear_access_cache
 # Nota: log_action pode não funcionar sem login, então vamos usar try/except
 try:
@@ -20,7 +20,10 @@ except:
     def log_action(*args, **kwargs):
         pass  # Silencioso se não disponível
 import time
+import logging
 from datetime import datetime
+
+logging.basicConfig(level=logging.ERROR)
 
 
 def public_face_access_page():
@@ -61,7 +64,8 @@ def public_face_access_page():
         """)
         return
     
-    db_ops = SupabaseOperations()
+    # Usa cliente público com permissões limitadas (RLS)
+    db_ops = SupabasePublicClient()
     
     # Instruções
     with st.container():
@@ -111,8 +115,8 @@ def public_face_access_page():
                     person_company = person.get('company', '')
                     person_id = person.get('id')
                     
-                    # Verifica se está bloqueado
-                    is_blocked, block_reason = is_entity_blocked(person_name, person_company)
+                    # Verifica se está bloqueado usando cliente público
+                    is_blocked, block_reason = db_ops.check_blocked(person_name, person_company)
                     
                     if is_blocked:
                         # PESSOA BLOQUEADA
@@ -134,27 +138,26 @@ def public_face_access_page():
                             except:
                                 pass
                         
-                        # Registra tentativa de acesso bloqueado (modo silencioso)
+                        # Registra tentativa de acesso bloqueado
                         now = get_sao_paulo_time()
-                        st.session_state._silent_mode = True
+                        record_data = {
+                            'name': person_name,
+                            'cpf': person_cpf or '',
+                            'placa': '',
+                            'marca_carro': '',
+                            'horario_entrada': now.strftime("%H:%M"),
+                            'data': now.strftime("%d/%m/%Y"),
+                            'empresa': person_company or '',
+                            'status_entrada': 'Bloqueado',
+                            'motivo_bloqueio': f"Tentativa de acesso negada: {block_reason}",
+                            'aprovador': 'Sistema Automático',
+                            'data_primeiro_registro': '',
+                            'person_id': person_id
+                        }
                         try:
-                            add_record(
-                                name=person_name,
-                                cpf=person_cpf,
-                                placa="",
-                                marca_carro="",
-                                horario_entrada=now.strftime("%H:%M"),
-                                data=now.strftime("%d/%m/%Y"),
-                                empresa=person_company,
-                                status="Bloqueado",
-                                motivo=f"Tentativa de acesso negada: {block_reason}",
-                                aprovador="Sistema Automático",
-                                first_reg_date="",
-                                person_id=person_id
-                            )
-                        finally:
-                            if '_silent_mode' in st.session_state:
-                                del st.session_state._silent_mode
+                            db_ops.add_access_record(record_data)
+                        except Exception as e:
+                            logging.error(f"Erro ao registrar acesso bloqueado: {e}")
                         
                         st.info("💡 Se você acredita que isso é um erro, entre em contato com a administração.")
                     
@@ -173,44 +176,27 @@ def public_face_access_page():
                         now = get_sao_paulo_time()
                         approver = "Sistema Automático (Reconhecimento Facial)"
                         
-                        # Busca último registro para pegar dados como placa, etc
-                        access_records = db_ops.load_access_records()
-                        last_record = None
-                        if access_records:
-                            # Filtra registros da mesma pessoa
-                            person_records = [r for r in access_records 
-                                            if r.get('person_id') == person_id or 
-                                            r.get('name', '').lower() == person_name.lower()]
-                            if person_records:
-                                # Pega o mais recente
-                                person_records.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-                                last_record = person_records[0]
+                        # Prepara dados para registro (público não pode ler registros anteriores)
+                        placa = ''
+                        marca_carro = ''
+                        empresa = person_company or ''
                         
-                        # Prepara dados para registro
-                        placa = last_record.get('placa', '') if last_record else ''
-                        marca_carro = last_record.get('marca_carro', '') if last_record else ''
-                        empresa = person_company if person_company else (last_record.get('empresa', '') if last_record else '')
-                        
-                        # Registra entrada (modo silencioso para não mostrar mensagens duplicadas)
-                        st.session_state._silent_mode = True
-                        try:
-                            success = add_record(
-                                name=person_name,
-                                cpf=person_cpf,
-                                placa=placa,
-                                marca_carro=marca_carro,
-                                horario_entrada=now.strftime("%H:%M"),
-                                data=now.strftime("%d/%m/%Y"),
-                                empresa=empresa,
-                                status="Autorizado",
-                                motivo="Acesso automático por reconhecimento facial",
-                                aprovador=approver,
-                                first_reg_date="",
-                                person_id=person_id
-                            )
-                        finally:
-                            if '_silent_mode' in st.session_state:
-                                del st.session_state._silent_mode
+                        # Registra entrada usando cliente público
+                        record_data = {
+                            'name': person_name,
+                            'cpf': person_cpf or '',
+                            'placa': placa or '',
+                            'marca_carro': marca_carro or '',
+                            'horario_entrada': now.strftime("%H:%M"),
+                            'data': now.strftime("%d/%m/%Y"),
+                            'empresa': empresa or '',
+                            'status_entrada': 'Autorizado',
+                            'motivo_bloqueio': 'Acesso automático por reconhecimento facial',
+                            'aprovador': approver,
+                            'data_primeiro_registro': '',
+                            'person_id': person_id
+                        }
+                        success = db_ops.add_access_record(record_data) is not None
                         
                         if success:
                             st.balloons()
