@@ -9,7 +9,7 @@ from app.data_operations import (
     is_entity_blocked,
     check_briefing_needed,
     update_schedule_status,
-    load_data_from_sheets
+    load_data_from_supabase
 )
 from app.face_recognition_utils import (
     is_face_recognition_available,
@@ -450,7 +450,7 @@ def vehicle_access_interface():
             st.error(f"Erro ao carregar o vídeo: {e}")
     
     if 'df_acesso_veiculos' not in st.session_state:
-        load_data_from_sheets()
+        load_data_from_supabase()
         df = st.session_state.df_acesso_veiculos
     else:
         df = st.session_state.df_acesso_veiculos

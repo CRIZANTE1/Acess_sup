@@ -39,7 +39,7 @@ jobs:
             admin_emails = "${{ secrets.ADMIN_EMAILS }}"
             from_name = "Sistema BAERI"
 
-            # Credenciais para acessar o Google Sheets
-            [connections.gsheets]
-            spreadsheet = "https://docs.google.com/spreadsheets/d/${{ secrets.SPREADSHEET_ID }}"
-            ${{ secrets.GCP_SERVICE_ACCOUNT_CREDENTIALS }}
+            # Configuração do Supabase
+            [supabase]
+            url = "${{ secrets.SUPABASE_URL }}"
+            key = "${{ secrets.SUPABASE_KEY }}"

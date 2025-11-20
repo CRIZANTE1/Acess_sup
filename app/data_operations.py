@@ -6,7 +6,7 @@ from app.logger import log_action
 from app.utils import get_sao_paulo_time, validate_cpf
 
 
-def load_data_from_sheets():
+def load_data_from_supabase():
     """Carrega os dados do Supabase e armazena no estado da sessão."""
     try:
         db_ops = SupabaseOperations()

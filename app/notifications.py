@@ -5,7 +5,7 @@ from email.mime.multipart import MIMEMultipart
 import logging
 from typing import List, Optional, Dict
 from app.utils import get_sao_paulo_time
-from app.operations import SheetOperations
+from app.supabase_db import SupabaseOperations
 
 logger = logging.getLogger(__name__)
 
@@ -376,18 +376,18 @@ def get_admin_emails() -> List[str]:
                 return [e.strip() for e in emails.split(',')]
             return emails
         
-        # Fallback: busca na planilha
-        sheet_ops = SheetOperations()
-        users_data = sheet_ops.carregar_dados_aba('users')
+        # Fallback: busca no Supabase
+        db_ops = SupabaseOperations()
+        users = db_ops.load_users()
         
-        if not users_data or len(users_data) < 2:
-            logger.warning("Nenhum usuário encontrado na planilha")
+        if not users:
+            logger.warning("Nenhum usuário encontrado no banco de dados")
             return []
         
         admin_emails = []
-        for row in users_data[1:]:
-            if len(row) >= 2 and row[1].lower() == 'admin':
-                admin_emails.append(row[0])
+        for user in users:
+            if user.get('role', '').lower() == 'admin' and user.get('email'):
+                admin_emails.append(user['email'])
         
         return admin_emails
         

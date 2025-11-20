@@ -21,14 +21,16 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install pandas pygsheets pytz
+          pip install pandas supabase pytz sendgrid
       
       - name: Generate and send report
         env:
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
-          SPREADSHEET_URL: ${{ secrets.SPREADSHEET_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
         run: |
-          python scripts/send_daily_report.py
+          # Nota: Script de relatório diário precisa ser atualizado para usar Supabase
+          # python scripts/send_daily_report.py
+          echo "Script de relatório diário precisa ser atualizado para usar Supabase"

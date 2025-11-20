@@ -3,7 +3,7 @@ import streamlit as st
 from auth.login_page import show_login_page, show_user_header, show_logout_button
 from auth.auth_utils import is_user_logged_in, get_user_role, is_session_expired
 from app.utils import get_sao_paulo_time
-from app.data_operations import load_data_from_sheets
+from app.data_operations import load_data_from_supabase
 from app.logger import log_action
 from app.ui_interface import vehicle_access_interface
 from app.admin_page import admin_page
@@ -29,7 +29,7 @@ def main():
     
     # Carrega os dados se ainda não estiverem na sessão
     if 'df_acesso_veiculos' not in st.session_state:
-        load_data_from_sheets()
+        load_data_from_supabase()
 
     if is_user_logged_in():
         

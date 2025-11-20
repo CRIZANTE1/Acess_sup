@@ -655,7 +655,7 @@ def admin_page():
         st.json({
             "sistema": "Controle de Acesso de Pessoas e Veículos",
             "versão": "3.0.0", 
-            "modo_login": "OIDC (OpenID Connect) com níveis via Google Sheets",
+            "modo_login": "OIDC (OpenID Connect) com níveis via Supabase",
             "status": "Operacional",
             "Developer": "Cristian Ferreira Carlos",
             "Data": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
