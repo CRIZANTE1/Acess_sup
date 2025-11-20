@@ -447,10 +447,6 @@ def display_logs(db_ops):
             st.dataframe(log_df.sort_values(by="Timestamp", ascending=False), use_container_width=True, hide_index=True)
         else:
             st.info("Nenhuma atividade de log registrada ainda.")
-            log_df = pd.DataFrame()
-            st.dataframe(log_df.sort_values(by="Timestamp", ascending=False), use_container_width=True, hide_index=True)
-        else:
-            st.info("Nenhuma atividade de log registrada ainda.")
     except Exception as e:
         st.warning(f"Não foi possível carregar os logs: {e}")
 
