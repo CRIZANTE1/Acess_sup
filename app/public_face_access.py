@@ -82,28 +82,30 @@ def public_face_access_page():
     st.markdown("---")
     st.markdown("### 📷 Captura de Foto")
     
+    # Instruções visuais
+    st.info("""
+    👆 **Posicione seu rosto bem iluminado e centralizado na câmera abaixo.**
+    
+    O sistema processará automaticamente quando você tirar a foto.
+    """)
+    
     # Usa camera_input do Streamlit para captura direta
     picture = st.camera_input(
-        "Tire uma foto para reconhecimento",
+        "📸 Tire uma foto para reconhecimento",
         key="face_camera",
-        help="Posicione seu rosto bem iluminado e centralizado na câmera"
+        help="Posicione seu rosto bem iluminado e centralizado na câmera. O sistema processará automaticamente."
     )
     
+    # Processa automaticamente quando a foto for capturada
     if picture:
-        # Mostra a foto capturada
-        st.image(picture, caption="Foto capturada", width=400)
-        
-        # Botão para processar
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            process_button = st.button(
-                "🔍 VERIFICAR ACESSO",
-                type="primary",
-                use_container_width=True,
-                key="process_face"
-            )
-        
-        if process_button:
+        # Verifica se já processou esta foto (evita reprocessamento)
+        if 'last_processed_image' not in st.session_state or st.session_state.last_processed_image != picture.getvalue():
+            # Marca que esta foto foi processada
+            st.session_state.last_processed_image = picture.getvalue()
+            
+            # Mostra a foto capturada
+            st.image(picture, caption="Foto capturada - Processando...", width=400)
+            # Processa automaticamente
             with st.spinner("🔄 Processando reconhecimento facial..."):
                 # Busca pessoa correspondente
                 result = find_matching_person(picture, db_ops, threshold=0.4)
@@ -163,6 +165,11 @@ def public_face_access_page():
                             st.error(f"Erro ao registrar tentativa de acesso: {e}")
                         
                         st.info("💡 Se você acredita que isso é um erro, entre em contato com a administração.")
+                        
+                        # Limpa a foto processada para permitir nova tentativa
+                        st.session_state.last_processed_image = None
+                        time.sleep(2)
+                        st.rerun()
                     
                     else:
                         # PESSOA LIBERADA
@@ -223,9 +230,13 @@ def public_face_access_page():
                             
                             clear_access_cache()
                             
-                            # Aguarda antes de permitir nova tentativa
-                            time.sleep(3)
+                            # Limpa a foto processada para permitir nova tentativa
+                            st.session_state.last_processed_image = None
+                            
+                            # Aguarda um pouco antes de permitir nova tentativa
+                            time.sleep(2)
                             st.info("🔄 Você pode tirar uma nova foto para outro acesso.")
+                            st.rerun()
                 
                 else:
                     # PESSOA NÃO RECONHECIDA
@@ -252,6 +263,11 @@ def public_face_access_page():
                     - Se é sua primeira vez, entre em contato com a portaria para cadastro
                     - Verifique se está olhando diretamente para a câmera
                     """)
+                    
+                    # Limpa a foto processada para permitir nova tentativa
+                    st.session_state.last_processed_image = None
+                    time.sleep(2)
+                    st.rerun()
     
     # Rodapé
     st.markdown("---")
