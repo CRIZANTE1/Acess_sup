@@ -17,7 +17,9 @@ numpy>=1.26.0,<2.0
 Pillow>=10.1.0
 # OpenCV Headless - não requer OpenGL (resolve erro libGL.so.1 em ambientes headless)
 opencv-python-headless>=4.8.0
-# TensorFlow - necessário para DeepFace
-tensorflow>=2.15.0,<3.0
-# DeepFace - requer TensorFlow instalado primeiro
+# TensorFlow e Keras - versões compatíveis com DeepFace
+# Nota: DeepFace 0.0.79 tem problemas com TensorFlow 2.15+ devido a mudanças no Keras
+# Solução: usar TensorFlow 2.13 ou 2.14 que são mais estáveis com DeepFace
+tensorflow>=2.13.0,<2.15.0
+# DeepFace - versão fixa que funciona com TensorFlow 2.13/2.14
 deepface==0.0.79
