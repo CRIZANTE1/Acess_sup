@@ -38,7 +38,7 @@ def face_access_page():
     st.markdown("""
     ### Como Funciona
     
-    1. 📸 **Envie uma foto** da pessoa que deseja registrar entrada
+    1. 📸 **Tire uma foto** da pessoa usando a câmera abaixo
     2. 🤖 **O sistema reconhecerá** automaticamente se a pessoa está cadastrada
     3. ✅ **Se reconhecida**, a entrada será registrada automaticamente
     4. ❌ **Se não reconhecida**, você poderá registrar manualmente
@@ -46,31 +46,38 @@ def face_access_page():
     ---
     """)
     
-    # Upload de foto
-    uploaded_file = st.file_uploader(
-        "📷 Envie uma foto para reconhecimento",
-        type=['jpg', 'jpeg', 'png'],
-        help="Foto deve conter apenas um rosto, bem iluminado e frontal"
+    # Instruções visuais
+    st.info("""
+    👆 **Posicione a pessoa bem iluminada e centralizada na câmera abaixo.**
+    
+    O sistema processará automaticamente quando você tirar a foto.
+    """)
+    
+    # Captura de foto via câmera
+    st.markdown("### 📷 Captura de Foto")
+    picture = st.camera_input(
+        "📸 Tire uma foto para reconhecimento",
+        key="face_camera_access",
+        help="Posicione o rosto bem iluminado e centralizado na câmera. O sistema processará automaticamente."
     )
     
-    if uploaded_file:
-        from PIL import Image
-        image = Image.open(uploaded_file)
-        
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.image(image, caption="Foto enviada", width=300)
-        
-        with col2:
-            st.markdown("### Status do Reconhecimento")
+    # Processa automaticamente quando a foto for capturada
+    if picture:
+        # Verifica se já processou esta foto (evita reprocessamento)
+        picture_bytes = picture.getvalue()
+        if 'last_processed_image_access' not in st.session_state or st.session_state.last_processed_image_access != picture_bytes:
+            # Marca que esta foto foi processada
+            st.session_state.last_processed_image_access = picture_bytes
             
-            if st.button("🔍 Reconhecer e Registrar Entrada", type="primary", use_container_width=True):
-                with st.spinner("Processando reconhecimento facial..."):
-                    # Busca pessoa correspondente
-                    result = find_matching_person(uploaded_file, db_ops, threshold=0.4)
-                    
-                    if result:
+            # Mostra a foto capturada
+            st.image(picture, caption="Foto capturada - Processando...", width=400)
+            
+            # Processa automaticamente
+            with st.spinner("🔄 Processando reconhecimento facial..."):
+                # Busca pessoa correspondente
+                result = find_matching_person(picture, db_ops, threshold=0.4)
+                
+                if result:
                         person, distance = result
                         person_name = person.get('name', 'N/A')
                         person_cpf = person.get('cpf', '')
@@ -132,44 +139,47 @@ def face_access_page():
                             # Limpa cache
                             clear_access_cache()
                             
+                            # Limpa a foto processada para permitir nova tentativa
+                            st.session_state.last_processed_image_access = None
+                            
                             # Aguarda um pouco antes de limpar
                             time.sleep(2)
                             st.rerun()
                         else:
                             st.error("❌ Erro ao registrar entrada. Tente novamente.")
-                    else:
-                        st.warning("⚠️ **Pessoa não reconhecida**")
-                        st.info("""
-                        A pessoa pode não estar cadastrada no sistema ou a foto pode ser muito diferente.
+                else:
+                    st.warning("⚠️ **Pessoa não reconhecida**")
+                    st.info("""
+                    A pessoa pode não estar cadastrada no sistema ou a foto pode ser muito diferente.
+                    
+                    **Opções:**
+                    - Verifique se a pessoa está cadastrada na página "Cadastro de Pessoas"
+                    - Use a página "Controle de Acesso" para registro manual
+                    - Tente com outra foto (melhor iluminação, mais frontal)
+                    """)
+                    
+                    # Opção de cadastro rápido
+                    st.divider()
+                    st.markdown("### Cadastrar Pessoa Agora")
+                    
+                    with st.form("quick_register_form"):
+                        col_a, col_b = st.columns(2)
                         
-                        **Opções:**
-                        - Verifique se a pessoa está cadastrada na página "Cadastro de Pessoas"
-                        - Use a página "Controle de Acesso" para registro manual
-                        - Tente com outra foto (melhor iluminação, mais frontal)
-                        """)
+                        with col_a:
+                            new_name = st.text_input("Nome Completo *", key="quick_name")
+                            new_cpf = st.text_input("CPF", key="quick_cpf", placeholder="000.000.000-00")
+                            new_company = st.text_input("Empresa", key="quick_company")
                         
-                        # Opção de cadastro rápido
-                        st.divider()
-                        st.markdown("### Cadastrar Pessoa Agora")
+                        with col_b:
+                            st.write("**Foto já capturada acima**")
+                            st.caption("A mesma foto será usada para cadastro")
                         
-                        with st.form("quick_register_form"):
-                            col_a, col_b = st.columns(2)
-                            
-                            with col_a:
-                                new_name = st.text_input("Nome Completo *", key="quick_name")
-                                new_cpf = st.text_input("CPF", key="quick_cpf", placeholder="000.000.000-00")
-                                new_company = st.text_input("Empresa", key="quick_company")
-                            
-                            with col_b:
-                                st.write("**Foto já enviada acima**")
-                                st.caption("A mesma foto será usada para cadastro")
-                            
-                            if st.form_submit_button("📝 Cadastrar e Registrar Entrada", type="primary"):
+                        if st.form_submit_button("📝 Cadastrar e Registrar Entrada", type="primary"):
                                 if not new_name or not new_name.strip():
                                     st.error("❌ O nome é obrigatório.")
                                 else:
                                     # Processa a foto novamente para cadastro
-                                    result = process_uploaded_image(uploaded_file)
+                                    result = process_uploaded_image(picture)
                                     
                                     if result:
                                         from app.face_recognition_utils import encoding_to_json
@@ -191,11 +201,9 @@ def face_access_page():
                                         
                                         if new_person_id:
                                             # Faz upload da foto
-                                            uploaded_file.seek(0)
-                                            image_bytes = uploaded_file.read()
-                                            file_extension = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else 'jpg'
-                                            if file_extension not in ['jpg', 'jpeg', 'png']:
-                                                file_extension = 'jpg'
+                                            picture.seek(0)
+                                            image_bytes = picture.read()
+                                            file_extension = 'jpg'  # Câmera sempre retorna JPEG
                                             
                                             photo_url = db_ops.upload_face_photo(new_person_id, image_bytes, file_extension)
                                             if photo_url:
@@ -226,6 +234,10 @@ def face_access_page():
                                                     f"Nova pessoa '{new_name.strip()}' cadastrada e entrada registrada via reconhecimento facial"
                                                 )
                                                 clear_access_cache()
+                                                
+                                                # Limpa a foto processada para permitir nova tentativa
+                                                st.session_state.last_processed_image_access = None
+                                                
                                                 time.sleep(2)
                                                 st.rerun()
                                             else:
