@@ -74,6 +74,44 @@ Adiciona o usuário administrador inicial ao sistema.
 - Edite o email no script antes de executar se necessário
 - O email deve corresponder ao email usado no login Google OIDC
 
+### 004_create_storage_bucket.sql
+
+Cria políticas RLS para o bucket de storage de fotos faciais.
+
+**Status:** ✅ Bucket criado e políticas aplicadas via MCP Supabase
+
+**O que faz:**
+- Habilita RLS na tabela `storage.objects`
+- Cria política de leitura pública (public)
+- Cria política de inserção para usuários autenticados
+- Cria política de atualização para usuários autenticados
+- Cria política de deleção apenas para admins
+
+**Políticas criadas:**
+- `Public Access` - Leitura pública de fotos
+- `Authenticated users can upload` - Inserção para autenticados
+- `Authenticated users can update` - Atualização para autenticados
+- `Admins can delete` - Deleção apenas para admins
+
+**Quando usar:**
+- Após criar o bucket manualmente no painel (se necessário)
+- Para aplicar políticas de segurança no storage
+
+### 005_verify_storage_setup.sql
+
+Script de verificação para confirmar que o bucket e políticas de storage estão configurados corretamente.
+
+**O que faz:**
+- Verifica se o bucket `face-photos` existe
+- Lista todas as políticas RLS do storage
+- Verifica se RLS está habilitado
+- Fornece um resumo da configuração
+
+**Quando usar:**
+- Após executar `004_create_storage_bucket.sql`
+- Para diagnosticar problemas com upload de fotos
+- Para auditoria de segurança do storage
+
 ## Verificação
 
 Após aplicar as migrations, execute o script de verificação:

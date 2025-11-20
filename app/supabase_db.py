@@ -534,8 +534,9 @@ class SupabaseOperations:
         if not self._check_connection():
             return None
         
+        bucket_name = 'face-photos'  # Nome do bucket no Supabase Storage
+        
         try:
-            bucket_name = 'face-photos'  # Nome do bucket no Supabase Storage
             file_path = f"{person_id}/photo.{file_extension}"
             
             # Faz upload do arquivo
@@ -551,14 +552,35 @@ class SupabaseOperations:
             return public_url
             
         except Exception as e:
+            error_msg = str(e).lower()
             logging.error(f"Erro ao fazer upload de foto: {e}")
-            # Se o bucket não existir, tenta criar (requer permissões)
-            try:
-                # Nota: Criação de bucket requer permissões admin
-                # O bucket deve ser criado manualmente no painel do Supabase
-                logging.warning(f"Bucket 'face-photos' pode não existir. Crie-o no painel do Supabase.")
-            except:
-                pass
+            
+            # Verifica se o erro é relacionado ao bucket não existir
+            if 'bucket' in error_msg and ('not found' in error_msg or 'does not exist' in error_msg):
+                error_message = f"""
+                ❌ **Bucket '{bucket_name}' não encontrado no Supabase Storage.**
+                
+                **Para resolver:**
+                
+                1. Acesse o painel do Supabase: https://app.supabase.com
+                2. Vá em **Storage** no menu lateral
+                3. Clique em **New bucket**
+                4. Configure:
+                   - **Name:** `face-photos`
+                   - **Public bucket:** ✅ Sim (marcado)
+                   - **File size limit:** 5 MB (ou mais)
+                   - **Allowed MIME types:** `image/jpeg, image/png, image/jpg`
+                5. Clique em **Create bucket**
+                6. Configure as políticas RLS (Row Level Security) se necessário
+                
+                **Nota:** O bucket deve ser público para que as fotos sejam acessíveis.
+                """
+                if st:
+                    st.error(error_message)
+                logging.error(f"Bucket '{bucket_name}' não existe. Crie-o no painel do Supabase.")
+            else:
+                if st:
+                    st.error(f"❌ Erro ao fazer upload da foto: {e}")
             return None
     
     def delete_face_photo(self, person_id: str, file_extension: str = 'jpg') -> bool:

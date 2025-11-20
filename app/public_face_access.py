@@ -82,24 +82,35 @@ def public_face_access_page():
     st.markdown("---")
     st.markdown("### 📷 Captura de Foto")
     
-    # Instruções visuais
-    st.info("""
-    👆 **Posicione seu rosto bem iluminado e centralizado na câmera abaixo.**
-    
-    O sistema processará automaticamente quando você tirar a foto.
-    """)
+    # Botão para resetar processamento (se já foi processado)
+    if st.session_state.get('access_processed', False):
+        st.success("✅ **Acesso registrado com sucesso!**")
+        if st.button("🔄 Tirar Nova Foto", type="primary", use_container_width=True):
+            st.session_state['access_processed'] = False
+            st.session_state.last_processed_image = None
+            st.rerun()
+    else:
+        # Instruções visuais (apenas se não foi processado)
+        st.info("""
+        👆 **Posicione seu rosto bem iluminado e centralizado na câmera abaixo.**
+        
+        O sistema processará automaticamente quando você tirar a foto.
+        """)
     
     # Usa camera_input do Streamlit para captura direta
     picture = st.camera_input(
         "📸 Tire uma foto para reconhecimento",
         key="face_camera",
-        help="Posicione seu rosto bem iluminado e centralizado na câmera. O sistema processará automaticamente."
+        help="Posicione seu rosto bem iluminado e centralizado na câmera. O sistema processará automaticamente.",
+        disabled=st.session_state.get('access_processed', False)
     )
     
     # Processa automaticamente quando a foto for capturada
     if picture:
         # Verifica se já processou esta foto (evita reprocessamento)
-        if 'last_processed_image' not in st.session_state or st.session_state.last_processed_image != picture.getvalue():
+        # Também verifica se já foi processado com sucesso para evitar loop
+        picture_bytes = picture.getvalue()
+        if ('last_processed_image' not in st.session_state or st.session_state.last_processed_image != picture_bytes) and not st.session_state.get('access_processed', False):
             # Marca que esta foto foi processada
             st.session_state.last_processed_image = picture.getvalue()
             
@@ -168,8 +179,7 @@ def public_face_access_page():
                         
                         # Limpa a foto processada para permitir nova tentativa
                         st.session_state.last_processed_image = None
-                        time.sleep(2)
-                        st.rerun()
+                        st.session_state['access_processed'] = False
                     
                     else:
                         # PESSOA LIBERADA
@@ -210,6 +220,10 @@ def public_face_access_page():
                         success = record_id is not None
                         
                         if success:
+                            # Marca que o processamento foi concluído com sucesso
+                            st.session_state['access_processed'] = True
+                            st.session_state['processed_person_id'] = person_id
+                            
                             st.balloons()
                             if LOGGING_AVAILABLE:
                                 try:
@@ -221,8 +235,11 @@ def public_face_access_page():
                                     pass
                             
                             # Mostra informações do acesso
-                            st.info(f"""
+                            st.success(f"""
+                            **✅ Entrada registrada com sucesso!**
+                            
                             **Informações do Acesso:**
+                            - **Nome:** {person_name}
                             - **Horário:** {now.strftime("%H:%M")}
                             - **Data:** {now.strftime("%d/%m/%Y")}
                             - **Empresa:** {empresa if empresa else 'Não informada'}
@@ -233,10 +250,7 @@ def public_face_access_page():
                             # Limpa a foto processada para permitir nova tentativa
                             st.session_state.last_processed_image = None
                             
-                            # Aguarda um pouco antes de permitir nova tentativa
-                            time.sleep(2)
                             st.info("🔄 Você pode tirar uma nova foto para outro acesso.")
-                            st.rerun()
                 
                 else:
                     # PESSOA NÃO RECONHECIDA
@@ -266,8 +280,7 @@ def public_face_access_page():
                     
                     # Limpa a foto processada para permitir nova tentativa
                     st.session_state.last_processed_image = None
-                    time.sleep(2)
-                    st.rerun()
+                    st.session_state['access_processed'] = False
     
     # Rodapé
     st.markdown("---")
