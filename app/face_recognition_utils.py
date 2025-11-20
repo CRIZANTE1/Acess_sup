@@ -144,34 +144,89 @@ def process_uploaded_image(uploaded_file, model_name: str = DEEPFACE_MODEL) -> O
         image.save(temp_path, "JPEG")
         
         try:
-            # Usa DeepFace para gerar embedding
-            # enforce_detection=True garante que detecta um rosto
-            embedding_obj = DeepFace.represent(
-                img_path=temp_path,
-                model_name=model_name,
-                enforce_detection=True,
-                detector_backend=DEEPFACE_BACKEND
-            )
+            # Lista de backends para tentar (do mais rápido ao mais preciso)
+            backends_to_try = ['opencv', 'ssd', 'dlib', 'mtcnn', 'retinaface']
+            if DEEPFACE_BACKEND in backends_to_try:
+                # Move o backend preferido para o início
+                backends_to_try.remove(DEEPFACE_BACKEND)
+                backends_to_try.insert(0, DEEPFACE_BACKEND)
             
-            # DeepFace retorna uma lista, pegamos o primeiro resultado
-            if isinstance(embedding_obj, list):
-                embedding = np.array(embedding_obj[0]['embedding'])
-            else:
-                embedding = np.array(embedding_obj['embedding'])
+            embedding = None
+            last_error = None
+            
+            # Tenta com enforce_detection=False primeiro (mais tolerante)
+            for backend in backends_to_try:
+                try:
+                    # Primeiro tenta sem enforce_detection (mais tolerante)
+                    embedding_obj = DeepFace.represent(
+                        img_path=temp_path,
+                        model_name=model_name,
+                        enforce_detection=False,  # Mais tolerante - não falha se não detectar
+                        detector_backend=backend
+                    )
+                    
+                    # Verifica se encontrou algum rosto
+                    if embedding_obj:
+                        if isinstance(embedding_obj, list) and len(embedding_obj) > 0:
+                            # Pega o primeiro rosto (mais confiável)
+                            embedding = np.array(embedding_obj[0]['embedding'])
+                            logging.info(f"Rosto detectado usando backend: {backend}")
+                            break
+                        elif isinstance(embedding_obj, dict) and 'embedding' in embedding_obj:
+                            embedding = np.array(embedding_obj['embedding'])
+                            logging.info(f"Rosto detectado usando backend: {backend}")
+                            break
+                        
+                except Exception as e:
+                    last_error = e
+                    logging.warning(f"Backend {backend} falhou: {e}")
+                    continue
+            
+            # Se não encontrou com enforce_detection=False, tenta com True (mais rigoroso)
+            if embedding is None:
+                for backend in backends_to_try[:2]:  # Tenta apenas os 2 primeiros backends
+                    try:
+                        embedding_obj = DeepFace.represent(
+                            img_path=temp_path,
+                            model_name=model_name,
+                            enforce_detection=True,  # Mais rigoroso
+                            detector_backend=backend
+                        )
+                        
+                        if embedding_obj:
+                            if isinstance(embedding_obj, list) and len(embedding_obj) > 0:
+                                embedding = np.array(embedding_obj[0]['embedding'])
+                                logging.info(f"Rosto detectado usando backend: {backend} (enforce_detection=True)")
+                                break
+                            elif isinstance(embedding_obj, dict) and 'embedding' in embedding_obj:
+                                embedding = np.array(embedding_obj['embedding'])
+                                logging.info(f"Rosto detectado usando backend: {backend} (enforce_detection=True)")
+                                break
+                                
+                    except Exception as e:
+                        last_error = e
+                        continue
+            
+            if embedding is None:
+                if st:
+                    error_msg = str(last_error) if last_error else "Nenhum rosto detectado"
+                    if "Face could not be detected" in error_msg or "No face detected" in error_msg:
+                        st.warning("""
+                        ⚠️ **Nenhum rosto detectado na imagem.**
+                        
+                        **Dicas:**
+                        - Certifique-se de que há um rosto visível e bem iluminado
+                        - Foto frontal, com boa iluminação
+                        - Rosto centralizado na imagem
+                        - Sem óculos escuros ou objetos cobrindo o rosto
+                        - Tente novamente com outra foto
+                        """)
+                    else:
+                        st.warning(f"⚠️ Não foi possível processar a foto. Tente novamente com outra imagem.")
+                return None
             
             return embedding, image
             
-        except ValueError as e:
-            error_msg = str(e)
-            if "Face could not be detected" in error_msg or "No face detected" in error_msg:
-                st.warning("⚠️ Nenhum rosto detectado na imagem. Por favor, envie uma foto com um rosto visível e bem iluminado.")
-            else:
-                st.warning(f"⚠️ Erro ao processar rosto: {error_msg}")
-            return None
-        except Exception as e:
-            st.error(f"Erro ao processar imagem com DeepFace: {e}")
-            logging.error(f"Erro ao processar imagem: {e}")
-            return None
         finally:
             # Remove arquivo temporário
             if os.path.exists(temp_path):
@@ -323,21 +378,51 @@ def validate_face_image(image, model_name: str = DEEPFACE_MODEL) -> Tuple[bool, 
         image.save(temp_path, "JPEG")
         
         try:
-            # Tenta detectar rosto
-            embedding_obj = DeepFace.represent(
-                img_path=temp_path,
-                model_name=model_name,
-                enforce_detection=True,
-                detector_backend=DEEPFACE_BACKEND
-            )
+            # Lista de backends para tentar
+            backends_to_try = ['opencv', 'ssd', 'dlib', 'mtcnn', 'retinaface']
+            if DEEPFACE_BACKEND in backends_to_try:
+                backends_to_try.remove(DEEPFACE_BACKEND)
+                backends_to_try.insert(0, DEEPFACE_BACKEND)
+            
+            embedding_obj = None
+            # Tenta com enforce_detection=False primeiro (mais tolerante)
+            for backend in backends_to_try:
+                try:
+                    embedding_obj = DeepFace.represent(
+                        img_path=temp_path,
+                        model_name=model_name,
+                        enforce_detection=False,  # Mais tolerante
+                        detector_backend=backend
+                    )
+                    if embedding_obj and len(embedding_obj) > 0:
+                        break
+                except:
+                    continue
+            
+            # Se não encontrou, tenta com enforce_detection=True
+            if not embedding_obj or len(embedding_obj) == 0:
+                for backend in backends_to_try[:2]:
+                    try:
+                        embedding_obj = DeepFace.represent(
+                            img_path=temp_path,
+                            model_name=model_name,
+                            enforce_detection=True,
+                            detector_backend=backend
+                        )
+                        if embedding_obj and len(embedding_obj) > 0:
+                            break
+                    except:
+                        continue
+            
+            if not embedding_obj or len(embedding_obj) == 0:
+                return False, "Nenhum rosto detectado na imagem. Tente com melhor iluminação ou foto mais frontal."
             
             # Verifica qualidade da imagem
-            height, width = image.size
+            width, height = image.size
             if width < 200 or height < 200:
                 return False, "Imagem muito pequena. Use uma foto com pelo menos 200x200 pixels."
             
-            # Verifica se há múltiplos rostos (DeepFace detecta apenas um por padrão)
-            # Mas podemos verificar se há mais de um resultado
+            # Verifica se há múltiplos rostos
             if isinstance(embedding_obj, list) and len(embedding_obj) > 1:
                 return False, "Múltiplos rostos detectados. Envie uma foto com apenas um rosto."
             
@@ -346,7 +431,7 @@ def validate_face_image(image, model_name: str = DEEPFACE_MODEL) -> Tuple[bool, 
         except ValueError as e:
             error_msg = str(e)
             if "Face could not be detected" in error_msg or "No face detected" in error_msg:
-                return False, "Nenhum rosto detectado na imagem."
+                return False, "Nenhum rosto detectado na imagem. Tente com melhor iluminação ou foto mais frontal."
             else:
                 return False, f"Erro ao validar: {error_msg}"
         finally:
