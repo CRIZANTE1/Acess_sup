@@ -173,7 +173,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 1. Acesse o SQL Editor no painel do Supabase
 2. Execute o arquivo `docs/migrations/001_rls_policies.sql`
-3. Verifique se todas as políticas foram criadas
+3. Execute o arquivo `docs/migrations/002_verify_rls.sql` para verificar
+4. Confirme que todas as políticas foram criadas corretamente
 
 ### Via Supabase CLI
 

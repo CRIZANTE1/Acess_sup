@@ -40,9 +40,49 @@ Aplica políticas de Row Level Security (RLS) em todas as tabelas do sistema.
 2. Execute esta migration de RLS
 3. Configure os usuários com roles apropriados
 
+### 002_verify_rls.sql
+
+Script de verificação para confirmar que todas as políticas RLS foram aplicadas corretamente.
+
+**O que faz:**
+- Verifica se RLS está habilitado em todas as tabelas
+- Lista todas as políticas criadas
+- Verifica se a função `get_user_role()` existe
+- Verifica se a coluna `role` existe na tabela `users`
+- Conta o total de políticas por tabela
+
+**Quando usar:**
+- Após executar `001_rls_policies.sql`
+- Para diagnosticar problemas de permissão
+- Para auditoria de segurança
+
+### 003_add_admin_user.sql
+
+Adiciona o usuário administrador inicial ao sistema.
+
+**O que faz:**
+- Adiciona ou atualiza o usuário com email `bboycrysforever@gmail.com`
+- Define o role como `'admin'`
+- Usa `ON CONFLICT` para atualizar se o usuário já existir
+
+**Quando usar:**
+- Após executar `001_rls_policies.sql`
+- Para criar o primeiro administrador
+- Para atualizar o role de um usuário existente para admin
+
+**Personalização:**
+- Edite o email no script antes de executar se necessário
+- O email deve corresponder ao email usado no login Google OIDC
+
 ## Verificação
 
-Após aplicar as migrations, verifique:
+Após aplicar as migrations, execute o script de verificação:
+
+```sql
+-- Execute o arquivo 002_verify_rls.sql
+```
+
+Ou verifique manualmente:
 
 1. **RLS está habilitado:**
    ```sql
