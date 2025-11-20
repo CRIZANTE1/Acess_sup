@@ -8,7 +8,8 @@ from app.face_recognition_utils import (
     encoding_to_json,
     validate_face_image,
     is_face_recognition_available,
-    find_matching_person
+    find_matching_person,
+    quick_face_verification
 )
 import io
 from app.utils import validate_cpf, format_cpf
@@ -197,23 +198,3 @@ def person_registration_page():
             st.dataframe(df_display, use_container_width=True, hide_index=True)
         else:
             st.info("Nenhuma pessoa cadastrada ainda.")
-
-
-def quick_face_verification(uploaded_file, db_ops, threshold: float = 0.4) -> tuple[bool, Optional[dict], str]:
-    """
-    Verificação rápida de rosto no momento do acesso.
-    
-    Returns:
-        (is_verified, person_data, message)
-    """
-    if not is_face_recognition_available():
-        return False, None, "Bibliotecas de reconhecimento facial não disponíveis."
-    
-    result = find_matching_person(uploaded_file, db_ops, threshold=threshold)
-    
-    if result:
-        person, distance = result
-        return True, person, f"Rosto verificado: {person.get('name', 'N/A')} (distância: {distance:.4f})"
-    else:
-        return False, None, "Rosto não reconhecido. A pessoa pode não estar cadastrada."
-

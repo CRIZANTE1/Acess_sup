@@ -11,10 +11,19 @@ from app.data_operations import (
     update_schedule_status,
     load_data_from_supabase
 )
-from app.face_recognition_utils import (
-    is_face_recognition_available,
-    quick_face_verification
-)
+# Importação segura de face_recognition_utils
+try:
+    from app.face_recognition_utils import (
+        is_face_recognition_available,
+        quick_face_verification
+    )
+except (ImportError, Exception) as e:
+    # Se falhar, cria funções stub
+    def is_face_recognition_available():
+        return False
+    
+    def quick_face_verification(*args, **kwargs):
+        return False, None, "Reconhecimento facial não disponível"
 from app.supabase_db import SupabaseOperations
 from app.utils import (
     format_cpf, 

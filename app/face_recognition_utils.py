@@ -336,3 +336,27 @@ def draw_face_box(image):
     except Exception as e:
         logging.error(f"Erro ao desenhar caixa: {e}")
         return image
+
+
+def quick_face_verification(uploaded_file, db_ops, threshold: float = 0.4) -> Tuple[bool, Optional[dict], str]:
+    """
+    Verificação rápida de rosto no momento do acesso.
+    
+    Args:
+        uploaded_file: Arquivo de imagem enviado
+        db_ops: Instância de SupabaseOperations ou SupabasePublicClient
+        threshold: Threshold para comparação (padrão 0.4)
+    
+    Returns:
+        Tuple (is_verified, person_data, message)
+    """
+    if not is_face_recognition_available():
+        return False, None, "Bibliotecas de reconhecimento facial não disponíveis."
+    
+    result = find_matching_person(uploaded_file, db_ops, threshold=threshold)
+    
+    if result:
+        person, distance = result
+        return True, person, f"Rosto verificado: {person.get('name', 'N/A')} (distância: {distance:.4f})"
+    else:
+        return False, None, "Rosto não reconhecido. A pessoa pode não estar cadastrada."
