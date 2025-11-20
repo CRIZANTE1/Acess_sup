@@ -10,19 +10,39 @@ import os
 
 logging.basicConfig(level=logging.ERROR)
 
-# Configuração para ambientes sem interface gráfica (Linux headless)
-# Desabilita OpenGL para evitar erro libGL.so.1
-import os
+# ============================================
+# CONFIGURAÇÃO PARA AMBIENTES HEADLESS (Linux sem interface gráfica)
+# ============================================
+# Configura variáveis de ambiente ANTES de importar OpenCV/DeepFace
+# Isso evita o erro "libGL.so.1: cannot open shared object file"
+
+# Desabilita OpenGL e interface gráfica
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 os.environ.setdefault('DISPLAY', ':0')
-# Força uso de backend sem OpenGL
 os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
-# Tenta desabilitar OpenGL no OpenCV
+
+# Força OpenCV a usar backend sem OpenGL
+os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
+os.environ.setdefault('OPENCV_LOG_LEVEL', 'ERROR')
+
+# Tenta configurar OpenCV antes de importar
 try:
+    # Importa cv2 e configura para não usar OpenGL
     import cv2
+    # Desabilita threading que pode causar problemas
     cv2.setNumThreads(1)
-except:
+    # Tenta usar backend sem OpenGL
+    try:
+        # Força uso de backend sem OpenGL
+        cv2.setUseOptimized(False)
+    except:
+        pass
+except ImportError:
+    # OpenCV não está instalado ainda, mas as variáveis de ambiente já estão configuradas
     pass
+except Exception as e:
+    # Se houver erro ao configurar OpenCV, continua mesmo assim
+    logging.warning(f"Aviso ao configurar OpenCV: {e}")
 
 # Imports opcionais com tratamento de erro
 try:
@@ -43,6 +63,7 @@ except ImportError:
 
 try:
     # Tenta importar DeepFace - ESSENCIAL para reconhecimento facial
+    # As variáveis de ambiente já foram configuradas acima para evitar erro libGL
     from deepface import DeepFace
     DEEPFACE_AVAILABLE = True
     logging.info("DeepFace importado com sucesso")
@@ -51,6 +72,19 @@ except ImportError as e:
     DeepFace = None
     logging.error(f"ERRO CRÍTICO: DeepFace não pôde ser importado: {e}")
     logging.error("Instale com: pip install deepface tensorflow opencv-python")
+except OSError as e:
+    # Erro específico de biblioteca do sistema (ex: libGL.so.1)
+    DEEPFACE_AVAILABLE = False
+    DeepFace = None
+    error_msg = str(e)
+    if 'libGL' in error_msg or 'libgthread' in error_msg:
+        logging.error(f"ERRO: Biblioteca do sistema não encontrada: {e}")
+        logging.error("SOLUÇÃO: Instale as bibliotecas do sistema necessárias:")
+        logging.error("  Ubuntu/Debian: sudo apt-get install -y libgl1-mesa-glx libglib2.0-0")
+        logging.error("  CentOS/RHEL: sudo yum install -y mesa-libGL mesa-libGL-devel glib2")
+        logging.error("  Ou use Docker com imagem que já inclui essas bibliotecas")
+    else:
+        logging.error(f"ERRO ao importar DeepFace: {e}")
 except Exception as e:
     DEEPFACE_AVAILABLE = False
     DeepFace = None
