@@ -11,8 +11,11 @@ unidecode
 sendgrid==6.11.0
 python-dotenv==1.0.0
 supabase==2.3.4
-deepface==0.0.79
-opencv-python==4.8.1.78
-Pillow==10.1.0
+# Dependências para DeepFace (ordem importante)
 numpy>=1.26.0,<2.0
-tensorflow>=2.15.0
+Pillow>=10.1.0
+opencv-python>=4.8.0
+# TensorFlow - necessário para DeepFace
+tensorflow>=2.15.0,<3.0
+# DeepFace - requer TensorFlow instalado primeiro
+deepface==0.0.79

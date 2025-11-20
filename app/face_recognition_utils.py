@@ -28,14 +28,19 @@ except ImportError:
     logging.warning("Pillow não está instalado")
 
 try:
-    # Tenta importar DeepFace, mas pode falhar se TensorFlow não estiver disponível
+    # Tenta importar DeepFace - ESSENCIAL para reconhecimento facial
     from deepface import DeepFace
     DEEPFACE_AVAILABLE = True
-except (ImportError, Exception) as e:
+    logging.info("DeepFace importado com sucesso")
+except ImportError as e:
     DEEPFACE_AVAILABLE = False
     DeepFace = None
-    # Não loga erro durante importação do módulo para evitar spam
-    pass
+    logging.error(f"ERRO CRÍTICO: DeepFace não pôde ser importado: {e}")
+    logging.error("Instale com: pip install deepface tensorflow opencv-python")
+except Exception as e:
+    DEEPFACE_AVAILABLE = False
+    DeepFace = None
+    logging.error(f"ERRO ao importar DeepFace: {e}")
 
 try:
     import cv2
