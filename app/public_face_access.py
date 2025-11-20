@@ -138,26 +138,29 @@ def public_face_access_page():
                             except:
                                 pass
                         
-                        # Registra tentativa de acesso bloqueado
+                        # Registra tentativa de acesso bloqueado (sem autenticação)
                         now = get_sao_paulo_time()
                         record_data = {
                             'name': person_name,
-                            'cpf': person_cpf or '',
-                            'placa': '',
-                            'marca_carro': '',
+                            'cpf': person_cpf if person_cpf else None,
+                            'placa': None,
+                            'marca_carro': None,
                             'horario_entrada': now.strftime("%H:%M"),
-                            'data': now.strftime("%d/%m/%Y"),
-                            'empresa': person_company or '',
+                            'data': now.strftime("%d/%m/%Y"),  # Será convertido para ISO
+                            'empresa': person_company if person_company else None,
                             'status_entrada': 'Bloqueado',
                             'motivo_bloqueio': f"Tentativa de acesso negada: {block_reason}",
                             'aprovador': 'Sistema Automático',
-                            'data_primeiro_registro': '',
+                            'data_primeiro_registro': None,
                             'person_id': person_id
                         }
                         try:
-                            db_ops.add_access_record(record_data)
+                            record_id = db_ops.add_access_record(record_data)
+                            if record_id:
+                                logging.info(f"Registro de acesso bloqueado criado: {record_id}")
                         except Exception as e:
                             logging.error(f"Erro ao registrar acesso bloqueado: {e}")
+                            st.error(f"Erro ao registrar tentativa de acesso: {e}")
                         
                         st.info("💡 Se você acredita que isso é um erro, entre em contato com a administração.")
                     
@@ -181,22 +184,23 @@ def public_face_access_page():
                         marca_carro = ''
                         empresa = person_company or ''
                         
-                        # Registra entrada usando cliente público
+                        # Registra entrada usando cliente público (sem autenticação)
                         record_data = {
                             'name': person_name,
-                            'cpf': person_cpf or '',
-                            'placa': placa or '',
-                            'marca_carro': marca_carro or '',
+                            'cpf': person_cpf if person_cpf else None,
+                            'placa': placa if placa else None,
+                            'marca_carro': marca_carro if marca_carro else None,
                             'horario_entrada': now.strftime("%H:%M"),
-                            'data': now.strftime("%d/%m/%Y"),
-                            'empresa': empresa or '',
+                            'data': now.strftime("%d/%m/%Y"),  # Será convertido para ISO
+                            'empresa': empresa if empresa else None,
                             'status_entrada': 'Autorizado',
                             'motivo_bloqueio': 'Acesso automático por reconhecimento facial',
                             'aprovador': approver,
-                            'data_primeiro_registro': '',
+                            'data_primeiro_registro': None,  # None ao invés de string vazia
                             'person_id': person_id
                         }
-                        success = db_ops.add_access_record(record_data) is not None
+                        record_id = db_ops.add_access_record(record_data)
+                        success = record_id is not None
                         
                         if success:
                             st.balloons()

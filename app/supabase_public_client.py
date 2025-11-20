@@ -85,11 +85,46 @@ class SupabasePublicClient:
         """
         Adiciona registro de acesso.
         Respeita RLS: público pode inserir registros de acesso.
+        Converte datas do formato brasileiro (DD/MM/YYYY) para ISO se necessário.
         """
         if not self._check_connection():
             return None
         try:
-            response = self.client.table('access_records').insert(record_data).execute()
+            from datetime import datetime
+            
+            # Prepara os dados convertendo datas se necessário
+            prepared_data = record_data.copy()
+            
+            # Converte data de string brasileira para ISO se necessário
+            if 'data' in prepared_data and prepared_data['data']:
+                data_str = prepared_data['data']
+                if isinstance(data_str, str) and '/' in data_str:
+                    try:
+                        # Formato brasileiro DD/MM/YYYY
+                        data_date = datetime.strptime(data_str, "%d/%m/%Y").date()
+                        prepared_data['data'] = data_date.isoformat()
+                    except:
+                        # Se falhar, mantém como está
+                        pass
+            
+            # Converte data_primeiro_registro se necessário
+            if 'data_primeiro_registro' in prepared_data and prepared_data['data_primeiro_registro']:
+                first_reg_str = prepared_data['data_primeiro_registro']
+                if isinstance(first_reg_str, str) and first_reg_str and '/' in first_reg_str:
+                    try:
+                        first_reg_date = datetime.strptime(first_reg_str, "%d/%m/%Y").date()
+                        prepared_data['data_primeiro_registro'] = first_reg_date.isoformat()
+                    except:
+                        pass
+                elif not first_reg_str or first_reg_str == '':
+                    # Remove se vazio
+                    prepared_data['data_primeiro_registro'] = None
+            
+            # Remove apenas strings vazias, mantém None para campos opcionais
+            prepared_data = {k: v for k, v in prepared_data.items() if not (isinstance(v, str) and v == '')}
+            
+            # Insere o registro
+            response = self.client.table('access_records').insert(prepared_data).execute()
             if response.data and len(response.data) > 0:
                 return response.data[0].get('id')
             return None
