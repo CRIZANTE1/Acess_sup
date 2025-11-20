@@ -10,6 +10,20 @@ import os
 
 logging.basicConfig(level=logging.ERROR)
 
+# Configuração para ambientes sem interface gráfica (Linux headless)
+# Desabilita OpenGL para evitar erro libGL.so.1
+import os
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+os.environ.setdefault('DISPLAY', ':0')
+# Força uso de backend sem OpenGL
+os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
+# Tenta desabilitar OpenGL no OpenCV
+try:
+    import cv2
+    cv2.setNumThreads(1)
+except:
+    pass
+
 # Imports opcionais com tratamento de erro
 try:
     import numpy as np

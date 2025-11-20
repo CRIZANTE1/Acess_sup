@@ -32,8 +32,20 @@ class SupabaseOperations:
                 self.client = None
                 return
             
-            self.client: Client = create_client(supabase_url, supabase_key)
-            logging.info("Conexão com Supabase estabelecida com sucesso.")
+            # Cria cliente Supabase
+            # Nota: Versões antigas do supabase-py podem ter problemas com proxy
+            # A versão >=2.8.1 resolve esse problema
+            try:
+                self.client: Client = create_client(supabase_url, supabase_key)
+                logging.info("Conexão com Supabase estabelecida com sucesso.")
+            except (TypeError, ValueError) as e:
+                # Se houver erro de argumentos (ex: proxy), tenta criar sem opções extras
+                error_msg = str(e)
+                if 'proxy' in error_msg.lower():
+                    logging.warning(f"Erro relacionado a proxy detectado. Atualize supabase-py para >=2.8.1: {e}")
+                else:
+                    logging.warning(f"Erro ao criar cliente Supabase: {e}")
+                self.client = None
             
         except Exception as e:
             logging.error(f"Erro ao conectar ao Supabase: {e}")

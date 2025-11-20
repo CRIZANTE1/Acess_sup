@@ -8,7 +8,8 @@ from app.logger import log_action
 from app.ui_interface import vehicle_access_interface
 from app.admin_page import admin_page
 from app.summary_page import summary_page 
-from app.scheduling_page import scheduling_page
+# Importação dinâmica para evitar problemas de cache
+# from app.scheduling_page import scheduling_page
 from app.security import SessionSecurity
 
 st.set_page_config(page_title="Controle de Acesso BAERI", layout="wide")
@@ -90,6 +91,7 @@ def main():
         elif page == "Controle de Acesso":
             vehicle_access_interface()
         elif page == "Agendar Visita":
+            from app.scheduling_page import scheduling_page
             scheduling_page()
         elif page == "Cadastro de Pessoas":
             from app.person_management import person_registration_page

@@ -35,8 +35,20 @@ class SupabasePublicClient:
                 self.client = None
                 return
             
-            self.client: Client = create_client(supabase_url, supabase_key)
-            logging.info("Cliente público Supabase inicializado.")
+            # Cria cliente Supabase
+            # Nota: Versões antigas do supabase-py podem ter problemas com proxy
+            # A versão >=2.8.1 resolve esse problema
+            try:
+                self.client: Client = create_client(supabase_url, supabase_key)
+                logging.info("Cliente público Supabase inicializado.")
+            except (TypeError, ValueError) as e:
+                # Se houver erro de argumentos (ex: proxy), tenta criar sem opções extras
+                error_msg = str(e)
+                if 'proxy' in error_msg.lower():
+                    logging.warning(f"Erro relacionado a proxy detectado. Atualize supabase-py para >=2.8.1: {e}")
+                else:
+                    logging.warning(f"Erro ao criar cliente Supabase público: {e}")
+                self.client = None
             
         except Exception as e:
             logging.error(f"Erro ao conectar ao Supabase (público): {e}")
@@ -80,6 +92,22 @@ class SupabasePublicClient:
         except Exception as e:
             logging.error(f"Erro ao buscar blocklist (público): {e}")
             return []
+    
+    def check_blocked(self, name: str, company: str) -> tuple[bool, Optional[str]]:
+        """
+        Verifica se um nome ou empresa está na blocklist usando o cliente público.
+        Returns: (is_blocked: bool, reason: Optional[str])
+        """
+        blocklist_data = self.get_blocklist()
+        if not blocklist_data:
+            return False, None
+
+        for item in blocklist_data:
+            if item.get('type') == 'Pessoa' and item.get('value', '').lower() == name.lower():
+                return True, item.get('reason', 'Bloqueado por nome')
+            if item.get('type') == 'Empresa' and item.get('value', '').lower() == company.lower():
+                return True, item.get('reason', 'Bloqueado por empresa')
+        return False, None
     
     def add_access_record(self, record_data: Dict) -> Optional[str]:
         """

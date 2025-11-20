@@ -10,7 +10,8 @@ python-Levenshtein
 unidecode
 sendgrid==6.11.0
 python-dotenv==1.0.0
-supabase==2.3.4
+supabase>=2.8.1
+gotrue>=2.8.1
 # Dependências para DeepFace (ordem importante)
 numpy>=1.26.0,<2.0
 Pillow>=10.1.0
