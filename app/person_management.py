@@ -39,6 +39,46 @@ def person_registration_page():
     with tab1:
         st.subheader("Cadastrar Nova Pessoa")
         
+        # Foto deve ser capturada fora do form para estar disponível no submit
+        st.markdown("### Foto para Reconhecimento Facial")
+        
+        # Opção de escolher entre upload ou câmera
+        photo_option = st.radio(
+            "Como deseja enviar a foto?",
+            ["📷 Usar Câmera", "📁 Fazer Upload"],
+            horizontal=True,
+            key="photo_option"
+        )
+        
+        uploaded_file = None
+        camera_picture = None
+        
+        if photo_option == "📷 Usar Câmera":
+            camera_picture = st.camera_input(
+                "Tire uma foto do rosto *",
+                key="person_camera",
+                help="Posicione o rosto bem iluminado e centralizado na câmera"
+            )
+            if camera_picture:
+                from PIL import Image
+                image = Image.open(camera_picture)
+                st.image(image, caption="Foto capturada", width=200)
+                # Converte camera_picture para formato compatível com uploaded_file
+                uploaded_file = camera_picture
+        else:
+            uploaded_file = st.file_uploader(
+                "Envie uma foto do rosto *",
+                type=['jpg', 'jpeg', 'png'],
+                help="Foto deve conter apenas um rosto, bem iluminado e frontal"
+            )
+            
+            if uploaded_file:
+                from PIL import Image
+                image = Image.open(uploaded_file)
+                st.image(image, caption="Foto enviada", width=200)
+        
+        st.markdown("---")
+        
         with st.form("person_registration_form"):
             col1, col2 = st.columns([1, 1])
             
@@ -48,17 +88,11 @@ def person_registration_page():
                 company = st.text_input("Empresa", placeholder="Nome da Empresa")
             
             with col2:
-                st.markdown("### Foto para Reconhecimento Facial")
-                uploaded_file = st.file_uploader(
-                    "Envie uma foto do rosto *",
-                    type=['jpg', 'jpeg', 'png'],
-                    help="Foto deve conter apenas um rosto, bem iluminado e frontal"
-                )
-                
+                st.markdown("**Foto:**")
                 if uploaded_file:
-                    from PIL import Image
-                    image = Image.open(uploaded_file)
-                    st.image(image, caption="Foto enviada", width=200)
+                    st.success("✅ Foto selecionada acima")
+                else:
+                    st.warning("⚠️ Selecione uma foto acima")
             
             st.markdown("**Campos obrigatórios:** Nome e Foto")
             
@@ -98,13 +132,21 @@ def person_registration_page():
                         
                         if person_id:
                             # Faz upload da foto para o storage
-                            uploaded_file.seek(0)  # Volta ao início do arquivo
-                            image_bytes = uploaded_file.read()
-                            
-                            # Determina extensão do arquivo
-                            file_extension = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else 'jpg'
-                            if file_extension not in ['jpg', 'jpeg', 'png']:
-                                file_extension = 'jpg'
+                            # Verifica se veio da câmera ou upload
+                            # Se uploaded_file tem atributo 'name', veio de upload
+                            # Se não tem, veio da câmera (BytesIO)
+                            if hasattr(uploaded_file, 'name') and uploaded_file.name:
+                                # Veio de upload
+                                uploaded_file.seek(0)  # Volta ao início do arquivo
+                                image_bytes = uploaded_file.read()
+                                # Determina extensão do arquivo
+                                file_extension = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else 'jpg'
+                                if file_extension not in ['jpg', 'jpeg', 'png']:
+                                    file_extension = 'jpg'
+                            else:
+                                # Veio da câmera (BytesIO)
+                                image_bytes = uploaded_file.getvalue()
+                                file_extension = 'jpg'  # Câmera sempre retorna JPEG
                             
                             # Faz upload para o storage
                             photo_url = db_ops.upload_face_photo(person_id, image_bytes, file_extension)
