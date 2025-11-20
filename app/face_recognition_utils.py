@@ -2,29 +2,48 @@
 Módulo para processamento e reconhecimento facial usando DeepFace
 """
 import streamlit as st
-import numpy as np
 import json
 from typing import Optional, Tuple, List
 import io
-from PIL import Image
 import logging
 import os
 
 logging.basicConfig(level=logging.ERROR)
 
+# Imports opcionais com tratamento de erro
 try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+    np = None
+    logging.warning("numpy não está instalado")
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    Image = None
+    logging.warning("Pillow não está instalado")
+
+try:
+    # Tenta importar DeepFace, mas pode falhar se TensorFlow não estiver disponível
     from deepface import DeepFace
     DEEPFACE_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception) as e:
     DEEPFACE_AVAILABLE = False
-    logging.warning("DeepFace não está instalado. Instale com: pip install deepface")
+    DeepFace = None
+    # Não loga erro durante importação do módulo para evitar spam
+    pass
 
 try:
     import cv2
     CV2_AVAILABLE = True
-except ImportError:
+except (ImportError, Exception) as e:
     CV2_AVAILABLE = False
-    logging.warning("opencv-python não está instalado. Instale com: pip install opencv-python")
+    cv2 = None
+    logging.warning(f"opencv-python não está disponível: {e}")
 
 
 # Configuração do modelo DeepFace
@@ -35,10 +54,11 @@ DEEPFACE_BACKEND = os.getenv('DEEPFACE_BACKEND', 'opencv')  # opencv, ssd, dlib,
 
 def is_face_recognition_available() -> bool:
     """Verifica se as bibliotecas de reconhecimento facial estão disponíveis"""
-    return DEEPFACE_AVAILABLE and CV2_AVAILABLE
+    return (DEEPFACE_AVAILABLE and CV2_AVAILABLE and 
+            NUMPY_AVAILABLE and PIL_AVAILABLE)
 
 
-def process_uploaded_image(uploaded_file, model_name: str = DEEPFACE_MODEL) -> Optional[Tuple[np.ndarray, Image.Image]]:
+def process_uploaded_image(uploaded_file, model_name: str = DEEPFACE_MODEL) -> Optional[Tuple]:
     """
     Processa uma imagem enviada pelo usuário e gera embedding facial usando DeepFace.
     Retorna (embedding facial, imagem PIL) ou None se não encontrar rosto.
@@ -51,7 +71,11 @@ def process_uploaded_image(uploaded_file, model_name: str = DEEPFACE_MODEL) -> O
         Tuple com (embedding, imagem) ou None
     """
     if not is_face_recognition_available():
-        st.error("Bibliotecas de reconhecimento facial não estão instaladas.")
+        if st:
+            st.error("Bibliotecas de reconhecimento facial não estão instaladas.")
+        return None
+    
+    if not NUMPY_AVAILABLE or not PIL_AVAILABLE or not DEEPFACE_AVAILABLE:
         return None
     
     try:
@@ -109,17 +133,19 @@ def process_uploaded_image(uploaded_file, model_name: str = DEEPFACE_MODEL) -> O
         return None
 
 
-def encoding_to_json(embedding: np.ndarray) -> str:
+def encoding_to_json(embedding) -> str:
     """Converte um embedding facial numpy para JSON string"""
     return json.dumps(embedding.tolist())
 
 
-def json_to_encoding(json_str: str) -> np.ndarray:
+def json_to_encoding(json_str: str):
     """Converte uma string JSON para embedding facial numpy"""
+    if not NUMPY_AVAILABLE:
+        return None
     return np.array(json.loads(json_str))
 
 
-def compare_faces(known_embedding: np.ndarray, face_embedding_to_check: np.ndarray, 
+def compare_faces(known_embedding, face_embedding_to_check, 
                  threshold: float = 0.4, metric: str = 'cosine') -> Tuple[bool, float]:
     """
     Compara dois embeddings faciais usando DeepFace.
@@ -228,7 +254,7 @@ def find_matching_person(uploaded_file, db_ops, threshold: float = 0.4,
         return None
 
 
-def validate_face_image(image: Image.Image, model_name: str = DEEPFACE_MODEL) -> Tuple[bool, str]:
+def validate_face_image(image, model_name: str = DEEPFACE_MODEL) -> Tuple[bool, str]:
     """
     Valida se uma imagem é adequada para reconhecimento facial usando DeepFace.
     
@@ -281,12 +307,12 @@ def validate_face_image(image: Image.Image, model_name: str = DEEPFACE_MODEL) ->
         return False, f"Erro ao validar imagem: {e}"
 
 
-def draw_face_box(image: Image.Image) -> Image.Image:
+def draw_face_box(image):
     """
     Desenha uma caixa ao redor do rosto detectado na imagem usando OpenCV.
     Útil para mostrar ao usuário que o rosto foi detectado.
     """
-    if not CV2_AVAILABLE:
+    if not CV2_AVAILABLE or not PIL_AVAILABLE or not NUMPY_AVAILABLE:
         return image
     
     try:
