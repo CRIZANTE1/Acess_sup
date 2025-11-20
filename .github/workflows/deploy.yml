@@ -1,0 +1,45 @@
+# Nome do workflow
+name: Deploy Streamlit App
+
+# Gatilho
+on:
+  push:
+    branches:
+      - main
+
+# Jobs
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Baixa o código
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2. Configura o Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # 3. Instala as dependências
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # 4. Faz o deploy
+      - name: Deploy to Streamlit Cloud
+        # ESTA É A LINHA QUE PRECISA SER CORRIGIDA
+        uses: streamlit/streamlit-deploy-action@v0.0.9
+        with:
+          secrets: |
+            [email]
+            gmail_user = "${{ secrets.GMAIL_USER }}"
+            gmail_app_password = "${{ secrets.GMAIL_APP_PASSWORD }}"
+            system_url = "${{ secrets.SYSTEM_URL }}"
+            admin_emails = "${{ secrets.ADMIN_EMAILS }}"
+            from_name = "Sistema BAERI"
+
+            # Credenciais para acessar o Google Sheets
+            [connections.gsheets]
+            spreadsheet = "https://docs.google.com/spreadsheets/d/${{ secrets.SPREADSHEET_ID }}"
+            ${{ secrets.GCP_SERVICE_ACCOUNT_CREDENTIALS }}
