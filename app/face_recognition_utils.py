@@ -51,7 +51,7 @@ try:
 except ImportError:
     NUMPY_AVAILABLE = False
     np = None
-    logging.warning("numpy não está instalado")
+    logging.error("❌ numpy não está instalado. Instale com: pip install numpy")
 
 try:
     from PIL import Image
@@ -59,7 +59,7 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
     Image = None
-    logging.warning("Pillow não está instalado")
+    logging.error("❌ Pillow não está instalado. Instale com: pip install Pillow")
 
 try:
     # Tenta importar DeepFace - ESSENCIAL para reconhecimento facial
@@ -107,8 +107,25 @@ DEEPFACE_BACKEND = os.getenv('DEEPFACE_BACKEND', 'opencv')  # opencv, ssd, dlib,
 
 def is_face_recognition_available() -> bool:
     """Verifica se as bibliotecas de reconhecimento facial estão disponíveis"""
-    return (DEEPFACE_AVAILABLE and CV2_AVAILABLE and 
-            NUMPY_AVAILABLE and PIL_AVAILABLE)
+    available = (DEEPFACE_AVAILABLE and CV2_AVAILABLE and 
+                 NUMPY_AVAILABLE and PIL_AVAILABLE)
+    
+    # Log detalhado se não estiver disponível (apenas para debug)
+    if not available:
+        missing = []
+        if not NUMPY_AVAILABLE:
+            missing.append("numpy")
+        if not PIL_AVAILABLE:
+            missing.append("Pillow")
+        if not CV2_AVAILABLE:
+            missing.append("opencv-python-headless")
+        if not DEEPFACE_AVAILABLE:
+            missing.append("deepface")
+        
+        if missing:
+            logging.warning(f"Bibliotecas faltando: {', '.join(missing)}")
+    
+    return available
 
 
 def process_uploaded_image(uploaded_file, model_name: str = DEEPFACE_MODEL) -> Optional[Tuple]:

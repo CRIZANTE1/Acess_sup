@@ -22,14 +22,34 @@ def person_registration_page():
     st.title("📸 Cadastro de Pessoas com Reconhecimento Facial")
     
     if not is_face_recognition_available():
-        st.error("""
-        ⚠️ **Bibliotecas de reconhecimento facial não estão instaladas.**
+        from app.face_recognition_utils import (
+            DEEPFACE_AVAILABLE, CV2_AVAILABLE, 
+            NUMPY_AVAILABLE, PIL_AVAILABLE
+        )
         
-        Para instalar, execute:
-        ```bash
-        pip install deepface opencv-python tensorflow
-        ```
-        """)
+        missing = []
+        if not NUMPY_AVAILABLE:
+            missing.append("numpy")
+        if not PIL_AVAILABLE:
+            missing.append("Pillow")
+        if not CV2_AVAILABLE:
+            missing.append("opencv-python-headless")
+        if not DEEPFACE_AVAILABLE:
+            missing.append("deepface")
+        
+        error_msg = "⚠️ **Bibliotecas de reconhecimento facial não estão instaladas.**\n\n"
+        if missing:
+            error_msg += f"**Bibliotecas faltando:** {', '.join(missing)}\n\n"
+        error_msg += "**Para instalar, execute:**\n\n"
+        error_msg += "```bash\n"
+        error_msg += "pip install deepface opencv-python-headless tensorflow numpy Pillow\n"
+        error_msg += "```\n\n"
+        error_msg += "**Ou instale todas as dependências:**\n\n"
+        error_msg += "```bash\n"
+        error_msg += "pip install -r requirements.txt\n"
+        error_msg += "```"
+        
+        st.error(error_msg)
         return
     
     db_ops = SupabaseOperations()
