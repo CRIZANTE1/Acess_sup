@@ -151,7 +151,7 @@ def face_access_page():
                             st.session_state['access_processed'] = True
                             st.session_state['processed_person_id'] = person_id
                             
-                            st.balloons()
+                            # st.balloons()  # Comentado: animação de balões desabilitada
                             st.success(f"🎉 **Entrada registrada com sucesso para {person_name}!**")
                             log_action(
                                 "FACE_ACCESS_GRANTED",
@@ -250,7 +250,7 @@ def face_access_page():
                                                 st.session_state['access_processed'] = True
                                                 st.session_state['processed_person_id'] = new_person_id
                                                 
-                                                st.balloons()
+                                                # st.balloons()  # Comentado: animação de balões desabilitada
                                                 st.success(f"🎉 **Pessoa cadastrada e entrada registrada com sucesso!**")
                                                 log_action(
                                                     "FACE_ACCESS_NEW_PERSON",

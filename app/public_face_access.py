@@ -224,7 +224,7 @@ def public_face_access_page():
                             st.session_state['access_processed'] = True
                             st.session_state['processed_person_id'] = person_id
                             
-                            st.balloons()
+                            # st.balloons()  # Comentado: animação de balões desabilitada
                             if LOGGING_AVAILABLE:
                                 try:
                                     log_action(
