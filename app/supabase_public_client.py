@@ -109,6 +109,20 @@ class SupabasePublicClient:
                 return True, item.get('reason', 'Bloqueado por empresa')
         return False, None
     
+    def load_access_records(self) -> List[Dict]:
+        """
+        Carrega registros de acesso (apenas leitura).
+        Respeita RLS: público pode ler registros de acesso.
+        """
+        if not self._check_connection():
+            return []
+        try:
+            response = self.client.table('access_records').select('*').order('data', desc=True).order('horario_entrada', desc=True).execute()
+            return response.data if response.data else []
+        except Exception as e:
+            logging.error(f"Erro ao carregar registros de acesso (público): {e}")
+            return []
+    
     def add_access_record(self, record_data: Dict) -> Optional[str]:
         """
         Adiciona registro de acesso.

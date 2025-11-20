@@ -9,7 +9,7 @@ from app.face_recognition_utils import (
     find_matching_person,
     process_uploaded_image
 )
-from app.data_operations import add_record
+from app.data_operations import add_record, can_register_new_entry
 from app.utils import get_sao_paulo_time
 from app.logger import log_action
 from auth.auth_utils import get_user_display_name
@@ -129,6 +129,25 @@ def face_access_page():
                         if person_company:
                             st.info(f"**Empresa:** {person_company}")
                         st.info(f"**Distância de similaridade:** {distance:.4f}")
+                        
+                        # Verifica se pode registrar nova entrada
+                        pode_registrar, motivo = can_register_new_entry(
+                            person_id=person_id,
+                            person_name=person_name,
+                            db_ops=db_ops
+                        )
+                        
+                        if not pode_registrar:
+                            st.warning(f"⚠️ **Entrada não registrada**")
+                            st.info(f"**Motivo:** {motivo}")
+                            st.info("""
+                            **Opções:**
+                            - Aguarde o tempo necessário ou
+                            - Registre a saída da última entrada no controle de acesso
+                            """)
+                            st.session_state['access_processed'] = False
+                            st.session_state.last_processed_image_access = None
+                            return
                         
                         # Registra entrada automaticamente
                         now = get_sao_paulo_time()

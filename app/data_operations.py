@@ -531,3 +531,147 @@ def check_briefing_needed(person_name, df):
     except Exception as e:
         print(f"Erro em check_briefing_needed: {e}")
         return False, "Erro ao verificar briefing"
+
+
+def can_register_new_entry(person_id=None, person_name=None, db_ops=None):
+    """
+    Verifica se é possível registrar uma nova entrada por reconhecimento facial.
+    
+    Regras:
+    - Se não há registro anterior, pode registrar
+    - Se o último registro tem saída registrada, pode registrar
+    - Se o último registro não tem saída, só pode registrar se passaram 12 horas desde a entrada
+    
+    Args:
+        person_id: ID da pessoa (opcional)
+        person_name: Nome da pessoa (opcional)
+        db_ops: Instância de SupabaseOperations ou SupabasePublicClient
+    
+    Returns:
+        Tuple (pode_registrar: bool, motivo: str)
+    """
+    if not db_ops:
+        return True, "Sistema não disponível - permitindo registro"
+    
+    try:
+        # Busca todos os registros
+        all_records = db_ops.load_access_records()
+        
+        if not all_records:
+            return True, "Primeira entrada"
+        
+        # Filtra registros da pessoa
+        person_records = []
+        for record in all_records:
+            if person_id and record.get('person_id') == person_id:
+                person_records.append(record)
+            elif person_name and record.get('name', '').lower() == person_name.lower():
+                person_records.append(record)
+        
+        if not person_records:
+            return True, "Primeira entrada"
+        
+        # Ordena por data e horário de entrada (mais recente primeiro)
+        def get_sort_key(record):
+            try:
+                data_str = record.get('data', '')
+                horario = record.get('horario_entrada', '00:00')
+                created_at = record.get('created_at', '')
+                
+                # Tenta usar created_at se disponível (mais preciso)
+                if created_at:
+                    try:
+                        if isinstance(created_at, str):
+                            return datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        return created_at
+                    except:
+                        pass
+                
+                # Fallback: combina data e horário
+                if isinstance(data_str, str) and '/' in data_str:
+                    data_obj = datetime.strptime(data_str, "%d/%m/%Y").date()
+                elif isinstance(data_str, str):
+                    data_obj = datetime.fromisoformat(data_str.split('T')[0]).date()
+                else:
+                    data_obj = data_str if hasattr(data_str, 'date') else datetime.now().date()
+                
+                hora, minuto = map(int, horario.split(':')) if ':' in str(horario) else (0, 0)
+                return datetime.combine(data_obj, datetime.min.time().replace(hour=hora, minute=minuto))
+            except:
+                return datetime.min
+        
+        person_records.sort(key=get_sort_key, reverse=True)
+        last_record = person_records[0]
+        
+        # Verifica se tem horário de saída
+        horario_saida = last_record.get('horario_saida')
+        if horario_saida and str(horario_saida).strip() and str(horario_saida) != 'None':
+            return True, "Última entrada já tem saída registrada"
+        
+        # Se não tem saída, verifica se passaram 12 horas
+        try:
+            # Tenta obter data e horário da entrada
+            data_entrada = last_record.get('data')
+            horario_entrada = last_record.get('horario_entrada', '00:00')
+            created_at = last_record.get('created_at')
+            
+            # Usa created_at se disponível (mais preciso)
+            if created_at:
+                try:
+                    if isinstance(created_at, str):
+                        entrada_datetime = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    else:
+                        entrada_datetime = created_at
+                    
+                    # Converte para timezone de São Paulo se necessário
+                    if entrada_datetime.tzinfo is None:
+                        from app.utils import get_sao_paulo_time
+                        now = get_sao_paulo_time()
+                        entrada_datetime = entrada_datetime.replace(tzinfo=now.tzinfo)
+                    
+                    now = get_sao_paulo_time()
+                    time_diff = now - entrada_datetime
+                    
+                    if time_diff.total_seconds() >= 12 * 3600:  # 12 horas em segundos
+                        return True, f"Passaram {int(time_diff.total_seconds() / 3600)} horas desde a última entrada"
+                    else:
+                        horas_restantes = 12 - (time_diff.total_seconds() / 3600)
+                        return False, f"Última entrada ainda está aberta. Aguarde {horas_restantes:.1f} horas ou registre a saída primeiro"
+                except Exception as e:
+                    # Se falhar, tenta método alternativo
+                    pass
+            
+            # Método alternativo: combina data e horário
+            if isinstance(data_entrada, str) and '/' in data_entrada:
+                data_obj = datetime.strptime(data_entrada, "%d/%m/%Y").date()
+            elif isinstance(data_entrada, str):
+                data_obj = datetime.fromisoformat(data_entrada.split('T')[0]).date()
+            else:
+                data_obj = data_entrada if hasattr(data_entrada, 'date') else datetime.now().date()
+            
+            hora, minuto = map(int, horario_entrada.split(':')) if ':' in str(horario_entrada) else (0, 0)
+            entrada_datetime = datetime.combine(data_obj, datetime.min.time().replace(hour=hora, minute=minuto))
+            
+            # Adiciona timezone de São Paulo
+            from app.utils import get_sao_paulo_time
+            sao_paulo_tz = get_sao_paulo_time().tzinfo
+            entrada_datetime = sao_paulo_tz.localize(entrada_datetime) if entrada_datetime.tzinfo is None else entrada_datetime
+            
+            now = get_sao_paulo_time()
+            time_diff = now - entrada_datetime
+            
+            if time_diff.total_seconds() >= 12 * 3600:  # 12 horas em segundos
+                return True, f"Passaram {int(time_diff.total_seconds() / 3600)} horas desde a última entrada"
+            else:
+                horas_restantes = 12 - (time_diff.total_seconds() / 3600)
+                return False, f"Última entrada ainda está aberta. Aguarde {horas_restantes:.1f} horas ou registre a saída primeiro"
+                
+        except Exception as e:
+            # Em caso de erro, permite o registro mas registra o erro
+            print(f"Erro ao verificar tempo desde última entrada: {e}")
+            return True, f"Erro ao verificar - permitindo registro (erro: {str(e)})"
+        
+    except Exception as e:
+        print(f"Erro em can_register_new_entry: {e}")
+        # Em caso de erro, permite o registro
+        return True, f"Erro ao verificar - permitindo registro"

@@ -11,6 +11,7 @@ from app.face_recognition_utils import (
 )
 # is_entity_blocked será implementado no cliente público
 from app.utils import get_sao_paulo_time, clear_access_cache
+from app.data_operations import can_register_new_entry
 # Nota: log_action pode não funcionar sem login, então vamos usar try/except
 try:
     from app.logger import log_action
@@ -214,6 +215,43 @@ def public_face_access_page():
                             <p style='font-size: 1.1em; color: #666;'>Bem-vindo(a)!</p>
                         </div>
                         """.format(person_name), unsafe_allow_html=True)
+                        
+                        # Verifica se pode registrar nova entrada
+                        pode_registrar, motivo = can_register_new_entry(
+                            person_id=person_id,
+                            person_name=person_name,
+                            db_ops=db_ops
+                        )
+                        
+                        if not pode_registrar:
+                            st.warning("""
+                            <div style='text-align: center; padding: 30px; background-color: #ffe; border: 3px solid #fa4; border-radius: 10px;'>
+                                <h1 style='color: #a60; font-size: 3em;'>⚠️</h1>
+                                <h2 style='color: #a60;'>ENTRADA NÃO REGISTRADA</h2>
+                                <p style='font-size: 1.1em;'><strong>{}</strong></p>
+                                <p style='font-size: 1em; color: #666;'>{}</p>
+                            </div>
+                            """.format(person_name, motivo), unsafe_allow_html=True)
+                            
+                            st.info("""
+                            **Opções:**
+                            - Aguarde o tempo necessário ou
+                            - Entre em contato com a portaria para registrar a saída da última entrada
+                            """)
+                            
+                            if LOGGING_AVAILABLE:
+                                try:
+                                    log_action(
+                                        "FACE_ACCESS_DENIED_DUPLICATE",
+                                        f"Tentativa de entrada duplicada negada para '{person_name}' (ID: {person_id}). Motivo: {motivo}"
+                                    )
+                                except:
+                                    pass
+                            
+                            # Limpa a foto processada para permitir nova tentativa
+                            st.session_state.last_processed_image = None
+                            st.session_state['access_processed'] = False
+                            return
                         
                         # Registra entrada automaticamente
                         now = get_sao_paulo_time()
