@@ -62,10 +62,28 @@ WITH CHECK (
     get_user_role() = 'admin'
 );
 
--- Operacional: Pode ler e editar (mas não deletar)
-CREATE POLICY "operacional_read_write_people"
+-- Operacional: Pode ler
+CREATE POLICY "operacional_select_people"
 ON people
-FOR SELECT, INSERT, UPDATE
+FOR SELECT
+TO authenticated
+USING (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode inserir
+CREATE POLICY "operacional_insert_people"
+ON people
+FOR INSERT
+TO authenticated
+WITH CHECK (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode atualizar
+CREATE POLICY "operacional_update_people"
+ON people
+FOR UPDATE
 TO authenticated
 USING (
     get_user_role() = 'operacional' OR get_user_role() = 'admin'
@@ -98,10 +116,28 @@ WITH CHECK (
     get_user_role() = 'admin'
 );
 
--- Operacional: Pode ler, inserir e atualizar
-CREATE POLICY "operacional_read_write_access_records"
+-- Operacional: Pode ler
+CREATE POLICY "operacional_select_access_records"
 ON access_records
-FOR SELECT, INSERT, UPDATE
+FOR SELECT
+TO authenticated
+USING (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode inserir
+CREATE POLICY "operacional_insert_access_records"
+ON access_records
+FOR INSERT
+TO authenticated
+WITH CHECK (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode atualizar
+CREATE POLICY "operacional_update_access_records"
+ON access_records
+FOR UPDATE
 TO authenticated
 USING (
     get_user_role() = 'operacional' OR get_user_role() = 'admin'
@@ -193,10 +229,28 @@ WITH CHECK (
     get_user_role() = 'admin'
 );
 
--- Operacional: Pode ler, inserir e atualizar
-CREATE POLICY "operacional_read_write_schedules"
+-- Operacional: Pode ler
+CREATE POLICY "operacional_select_schedules"
 ON schedules
-FOR SELECT, INSERT, UPDATE
+FOR SELECT
+TO authenticated
+USING (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode inserir
+CREATE POLICY "operacional_insert_schedules"
+ON schedules
+FOR INSERT
+TO authenticated
+WITH CHECK (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode atualizar
+CREATE POLICY "operacional_update_schedules"
+ON schedules
+FOR UPDATE
 TO authenticated
 USING (
     get_user_role() = 'operacional' OR get_user_role() = 'admin'
@@ -288,10 +342,28 @@ WITH CHECK (
     get_user_role() = 'admin'
 );
 
--- Operacional: Leitura e escrita
-CREATE POLICY "operacional_read_write_authorizers"
+-- Operacional: Pode ler
+CREATE POLICY "operacional_select_authorizers"
 ON authorizers
-FOR SELECT, INSERT, UPDATE
+FOR SELECT
+TO authenticated
+USING (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode inserir
+CREATE POLICY "operacional_insert_authorizers"
+ON authorizers
+FOR INSERT
+TO authenticated
+WITH CHECK (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode atualizar
+CREATE POLICY "operacional_update_authorizers"
+ON authorizers
+FOR UPDATE
 TO authenticated
 USING (
     get_user_role() = 'operacional' OR get_user_role() = 'admin'
@@ -319,10 +391,28 @@ WITH CHECK (
     get_user_role() = 'admin'
 );
 
--- Operacional: Leitura e escrita
-CREATE POLICY "operacional_read_write_materials"
+-- Operacional: Pode ler
+CREATE POLICY "operacional_select_materials"
 ON materials
-FOR SELECT, INSERT, UPDATE
+FOR SELECT
+TO authenticated
+USING (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode inserir
+CREATE POLICY "operacional_insert_materials"
+ON materials
+FOR INSERT
+TO authenticated
+WITH CHECK (
+    get_user_role() = 'operacional' OR get_user_role() = 'admin'
+);
+
+-- Operacional: Pode atualizar
+CREATE POLICY "operacional_update_materials"
+ON materials
+FOR UPDATE
 TO authenticated
 USING (
     get_user_role() = 'operacional' OR get_user_role() = 'admin'
