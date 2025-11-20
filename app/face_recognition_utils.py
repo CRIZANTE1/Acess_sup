@@ -15,27 +15,44 @@ logging.basicConfig(level=logging.ERROR)
 # ============================================
 # Configura variáveis de ambiente ANTES de importar OpenCV/DeepFace
 # Isso evita o erro "libGL.so.1: cannot open shared object file"
+# IMPORTANTE: Estas variáveis DEVEM ser configuradas ANTES de qualquer importação
 
 # Desabilita OpenGL e interface gráfica
-os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-os.environ.setdefault('DISPLAY', ':0')
-os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+os.environ['DISPLAY'] = ':0'
+os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '0'
+os.environ['OPENCV_LOG_LEVEL'] = 'ERROR'
+# Força OpenCV a não usar GUI
+os.environ['OPENCV_VIDEOIO_PRIORITY_MSMF'] = '0'
+# Desabilita threading que pode causar problemas
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 
-# Força OpenCV a usar backend sem OpenGL
-os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
-os.environ.setdefault('OPENCV_LOG_LEVEL', 'ERROR')
-
-# Tenta configurar OpenCV antes de importar
+# Tenta configurar OpenCV antes de importar DeepFace
+# Isso garante que o OpenCV seja configurado corretamente
 try:
-    # Importa cv2 e configura para não usar OpenGL
+    # Tenta importar cv2 (deve ser opencv-python-headless, não opencv-python)
     import cv2
     # Desabilita threading que pode causar problemas
-    cv2.setNumThreads(1)
+    try:
+        cv2.setNumThreads(1)
+    except:
+        pass
     # Tenta usar backend sem OpenGL
     try:
-        # Força uso de backend sem OpenGL
         cv2.setUseOptimized(False)
     except:
+        pass
+    # Verifica se é opencv-python-headless (não tem GUI)
+    try:
+        # Se conseguir criar uma janela, não é headless
+        cv2.namedWindow('test', cv2.WINDOW_NORMAL)
+        cv2.destroyWindow('test')
+        logging.warning("⚠️ opencv-python está instalado ao invés de opencv-python-headless")
+        logging.warning("   Desinstale opencv-python e instale opencv-python-headless")
+    except:
+        # Não conseguiu criar janela = headless (correto)
         pass
 except ImportError:
     # OpenCV não está instalado ainda, mas as variáveis de ambiente já estão configuradas
@@ -70,19 +87,33 @@ try:
 except ImportError as e:
     DEEPFACE_AVAILABLE = False
     DeepFace = None
-    logging.error(f"ERRO CRÍTICO: DeepFace não pôde ser importado: {e}")
-    logging.error("Instale com: pip install deepface tensorflow opencv-python")
+    logging.error(f"❌ ERRO CRÍTICO: DeepFace não pôde ser importado: {e}")
+    logging.error("")
+    logging.error("🔧 Para instalar, execute:")
+    logging.error("   pip install deepface opencv-python-headless tensorflow numpy Pillow")
+    logging.error("")
+    logging.error("⚠️ IMPORTANTE: Use opencv-python-headless (não opencv-python) em servidores")
 except OSError as e:
     # Erro específico de biblioteca do sistema (ex: libGL.so.1)
     DEEPFACE_AVAILABLE = False
     DeepFace = None
     error_msg = str(e)
     if 'libGL' in error_msg or 'libgthread' in error_msg:
-        logging.error(f"ERRO: Biblioteca do sistema não encontrada: {e}")
-        logging.error("SOLUÇÃO: Instale as bibliotecas do sistema necessárias:")
-        logging.error("  Ubuntu/Debian: sudo apt-get install -y libgl1-mesa-glx libglib2.0-0")
-        logging.error("  CentOS/RHEL: sudo yum install -y mesa-libGL mesa-libGL-devel glib2")
-        logging.error("  Ou use Docker com imagem que já inclui essas bibliotecas")
+        logging.error(f"❌ ERRO: Biblioteca do sistema não encontrada: {e}")
+        logging.error("")
+        logging.error("🔧 SOLUÇÕES POSSÍVEIS:")
+        logging.error("")
+        logging.error("1️⃣ DESINSTALE opencv-python e INSTALE opencv-python-headless:")
+        logging.error("   pip uninstall opencv-python -y")
+        logging.error("   pip install opencv-python-headless")
+        logging.error("")
+        logging.error("2️⃣ OU instale as bibliotecas do sistema (Linux):")
+        logging.error("   Ubuntu/Debian: sudo apt-get install -y libgl1-mesa-glx libglib2.0-0")
+        logging.error("   CentOS/RHEL: sudo yum install -y mesa-libGL mesa-libGL-devel glib2")
+        logging.error("")
+        logging.error("3️⃣ OU use Docker com imagem que já inclui essas bibliotecas")
+        logging.error("")
+        logging.error("⚠️ IMPORTANTE: Use opencv-python-headless em ambientes headless (servidores)")
     else:
         logging.error(f"ERRO ao importar DeepFace: {e}")
 except Exception as e:

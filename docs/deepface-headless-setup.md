@@ -51,16 +51,30 @@ O código já configura automaticamente as variáveis de ambiente necessárias:
 - `DISPLAY=:0`
 - `OPENCV_IO_ENABLE_OPENEXR=0`
 
-### Opção 4: Usar OpenCV Headless (Alternativa)
+### Opção 4: Usar OpenCV Headless (RECOMENDADO para servidores)
 
-Se as soluções acima não funcionarem, você pode tentar usar a versão headless do OpenCV:
+**⚠️ IMPORTANTE:** Para ambientes headless (servidores, Streamlit Cloud, etc.), use `opencv-python-headless` ao invés de `opencv-python`.
 
 ```bash
-pip uninstall opencv-python
+# Desinstale opencv-python se estiver instalado
+pip uninstall opencv-python -y
+
+# Instale opencv-python-headless
 pip install opencv-python-headless
 ```
 
-**Nota:** `opencv-python-headless` pode não ter todas as funcionalidades do `opencv-python`, mas geralmente funciona bem para reconhecimento facial.
+**Nota:** O `requirements.txt` já inclui `opencv-python-headless>=4.8.0`. Se você ainda tiver o erro `libGL.so.1`, verifique se o `opencv-python` não está instalado:
+
+```bash
+pip list | grep opencv
+```
+
+Se aparecer `opencv-python`, desinstale-o:
+
+```bash
+pip uninstall opencv-python -y
+pip install opencv-python-headless
+```
 
 ## Verificação
 
