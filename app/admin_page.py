@@ -590,25 +590,25 @@ def display_testing_page():
                 else:
                     st.error("Falha ao enviar a notificação de 'Nova Solicitação'.")
 
-    with col2:
-        if st.button("Simular Desbloqueio Urgente", use_container_width=True):
-            st.info("Simulando notificação de desbloqueio urgente para todos os admins...")
-            try:
-                success = send_notification(
-                    "blocklist_override",
-                    person_name="Ciclano Bloqueado (Teste)",
-                    company="Empresa de Teste Ltda.",
-                    reason="Solicitação de teste para verificar a notificação de desbloqueio de alta prioridade.",
-                    requester=get_user_display_name()
-                )
-                if success:
-                    st.success("Notificação de 'Desbloqueio Urgente' enviada com sucesso para os administradores!")
-                else:
-                    st.error("Falha ao enviar a notificação de 'Desbloqueio Urgente'.")
-            except Exception as e:
-                st.error(f"Erro ao enviar notificação: {e}")
-                import traceback
-                st.code(traceback.format_exc())
+        with col2:
+            if st.button("Simular Desbloqueio Urgente", use_container_width=True):
+                st.info("Simulando notificação de desbloqueio urgente para todos os admins...")
+                try:
+                    success = send_notification(
+                        "blocklist_override",
+                        person_name="Ciclano Bloqueado (Teste)",
+                        company="Empresa de Teste Ltda.",
+                        reason="Solicitação de teste para verificar a notificação de desbloqueio de alta prioridade.",
+                        requester=get_user_display_name()
+                    )
+                    if success:
+                        st.success("Notificação de 'Desbloqueio Urgente' enviada com sucesso para os administradores!")
+                    else:
+                        st.error("Falha ao enviar a notificação de 'Desbloqueio Urgente'.")
+                except Exception as e:
+                    st.error(f"Erro ao enviar notificação: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
 def admin_page():
     """Renderiza a página administrativa completa com abas."""
