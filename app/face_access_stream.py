@@ -446,7 +446,6 @@ def face_access_stream_page():
     
     # Configura stream com chave estável (popovers não interferem com o vídeo)
     stream_key = "face-recognition-stream"
-    st.caption("🔄 O stream inicia automaticamente. Clique em 'START' se necessário.")
     
     webrtc_ctx = webrtc_streamer(
         key=stream_key,
@@ -463,23 +462,65 @@ def face_access_stream_page():
         async_processing=True,
     )
     
-    # Auto-start usando JavaScript (executa após renderização)
-    if webrtc_ctx.state.playing is False and not st.session_state.get('auto_start_attempted', False):
-        # Marca que tentou auto-start para evitar loops
-        st.session_state.auto_start_attempted = True
-        
-        # Usa HTML/JS para clicar no botão START automaticamente
-        auto_start_js = """
-        <script>
-        setTimeout(function() {
-            var startButton = document.querySelector('button[title*="Start"], button:contains("Start")');
-            if (startButton && !startButton.disabled) {
-                startButton.click();
-            }
-        }, 1000);
+    # Auto-start usando JavaScript MELHORADO - sempre tenta quando stream está parado
+    # Usa timestamp único para evitar cache de JavaScript
+    auto_start_timestamp = int(time.time() * 1000)
+    
+    if not webrtc_ctx.state.playing:
+        # JavaScript robusto que tenta múltiplas vezes até conseguir
+        auto_start_js = f"""
+        <script id="autostart_{auto_start_timestamp}">
+        (function() {{
+            let attempts = 0;
+            const maxAttempts = 15;
+            
+            function tryStartStream() {{
+                attempts++;
+                
+                // Tenta encontrar o botão de várias formas
+                let startButton = null;
+                
+                // Método 1: Por texto do botão (mais confiável)
+                const buttons = document.querySelectorAll('button');
+                for (let btn of buttons) {{
+                    const text = btn.textContent.toUpperCase();
+                    if (text.includes('START') || text.includes('INICIAR')) {{
+                        startButton = btn;
+                        break;
+                    }}
+                }}
+                
+                // Método 2: Por atributos
+                if (!startButton) {{
+                    startButton = document.querySelector('button[data-testid*="start"], button[aria-label*="start"]');
+                }}
+                
+                // Se encontrou o botão e ele está habilitado, clica
+                if (startButton && !startButton.disabled && !startButton.hidden) {{
+                    console.log('🎥 Auto-start: Clicando no botão START (tentativa ' + attempts + ')');
+                    startButton.click();
+                    return true;
+                }}
+                
+                // Se não encontrou e ainda tem tentativas, tenta novamente
+                if (attempts < maxAttempts) {{
+                    setTimeout(tryStartStream, 400);
+                }} else {{
+                    console.log('⚠️ Auto-start: Botão START não encontrado após ' + maxAttempts + ' tentativas');
+                }}
+                
+                return false;
+            }}
+            
+            // Inicia as tentativas após pequeno delay
+            setTimeout(tryStartStream, 200);
+        }})();
         </script>
         """
         st.markdown(auto_start_js, unsafe_allow_html=True)
+        st.caption("⏳ Aguardando inicialização automática da câmera...")
+    else:
+        st.caption("✅ Câmera ativa - Monitorando entrada")
     
     # Sistema de notificações com toasts (funcionam junto com popovers)
     if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
