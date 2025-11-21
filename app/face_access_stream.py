@@ -108,6 +108,13 @@ def face_access_stream_page():
                 st.info(f"🕐 **Horário:** {popup['time']}")
                 st.info(f"🏢 **Empresa:** {popup['company']}")
                 if st.button("✓ OK - Fechar", key=f"close_popup_{popup.get('timestamp', 0)}", use_container_width=True):
+                    # Limpa cache e atualiza dados
+                    clear_access_cache()
+                    if 'df_acesso_veiculos' in st.session_state:
+                        del st.session_state['df_acesso_veiculos']
+                    if 'access_records_cache' in st.session_state:
+                        del st.session_state['access_records_cache']
+                    st.session_state.force_data_reload = True
                     st.session_state.show_entry_popup = None
                     st.rerun()
         
@@ -122,9 +129,17 @@ def face_access_stream_page():
                     if st.button("📝 Cadastrar Agora", type="primary", use_container_width=True):
                         st.session_state.show_quick_register = True
                         st.session_state.show_unknown_popup = None
+                        # Não limpa cache aqui pois vai abrir formulário de cadastro
                         st.rerun()
                 with col_b:
                     if st.button("✓ Ignorar", use_container_width=True):
+                        # Limpa cache e atualiza dados
+                        clear_access_cache()
+                        if 'df_acesso_veiculos' in st.session_state:
+                            del st.session_state['df_acesso_veiculos']
+                        if 'access_records_cache' in st.session_state:
+                            del st.session_state['access_records_cache']
+                        st.session_state.force_data_reload = True
                         st.session_state.show_unknown_popup = None
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
@@ -296,6 +311,11 @@ def face_access_stream_page():
     
     # Stream de vídeo
     st.markdown("### 📹 Câmera de Reconhecimento Facial")
+    st.caption("🔄 O stream inicia automaticamente. Aguarde alguns segundos...")
+    
+    # Configura auto-start do stream (inicia automaticamente após rerun)
+    if 'stream_started' not in st.session_state:
+        st.session_state.stream_started = True
     
     webrtc_ctx = webrtc_streamer(
         key="face-recognition-stream",
@@ -310,6 +330,7 @@ def face_access_stream_page():
             "audio": False,
         },
         async_processing=True,
+        desired_playing_state=True,  # AUTO-START: Inicia stream automaticamente
     )
     
     # Exibe toast para notificações (reforço visual)
@@ -371,6 +392,13 @@ def face_access_stream_page():
                         cancel_register = st.form_submit_button("❌ Cancelar", use_container_width=True)
                     
                     if cancel_register:
+                        # Limpa cache e atualiza dados
+                        clear_access_cache()
+                        if 'df_acesso_veiculos' in st.session_state:
+                            del st.session_state['df_acesso_veiculos']
+                        if 'access_records_cache' in st.session_state:
+                            del st.session_state['access_records_cache']
+                        st.session_state.force_data_reload = True
                         st.session_state.show_quick_register = False
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
@@ -436,7 +464,14 @@ def face_access_stream_page():
                                         "FACE_STREAM_QUICK_REGISTER",
                                         f"Cadastro rápido via stream: '{quick_name.strip()}' (ID: {new_person_id})"
                                     )
+                                    
+                                    # Limpa TODOS os caches
                                     clear_access_cache()
+                                    if 'df_acesso_veiculos' in st.session_state:
+                                        del st.session_state['df_acesso_veiculos']
+                                    if 'access_records_cache' in st.session_state:
+                                        del st.session_state['access_records_cache']
+                                    st.session_state.force_data_reload = True
                                     
                                     # Limpa estado
                                     st.session_state.show_quick_register = False
@@ -515,10 +550,11 @@ def face_access_stream_page():
                             # Registra horário de saída
                             now = get_sao_paulo_time()
                             horario_saida = now.strftime("%H:%M")
+                            exit_date = now.strftime("%d/%m/%Y")
                             
                             # Atualiza registro
                             from app.data_operations import update_exit_time
-                            success = update_exit_time(record_id=person_id, exit_time_str=horario_saida)
+                            success = update_exit_time(name=person_name, exit_date_str=exit_date, exit_time_str=horario_saida)
                             
                             if success:
                                 st.success(f"✅ Saída registrada para {person_name} às {horario_saida}")
