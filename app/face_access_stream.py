@@ -405,9 +405,34 @@ def face_access_stream_page():
         else:
             st.caption("🔄 Atualizando...")
     
-    # AUTO-REFRESH A CADA 120 SEGUNDOS (2 minutos)
-    # Força atualização dos dados e da interface
+    # AUTO-REFRESH E VERIFICAÇÃO DE POPOVERS PENDENTES
     current_time = time.time()
+    
+    # ✅ PRIORIDADE 1: Verifica se há rerun pendente (entrada registrada)
+    # Isso acontece imediatamente após uma entrada ser registrada pela thread assíncrona
+    if st.session_state.get('needs_rerun', False):
+        # Limpa flag
+        st.session_state.needs_rerun = False
+        logging.info("🔄 Rerun forçado - entrada registrada com sucesso")
+        st.rerun()
+    
+    # PRIORIDADE 2: Verifica se há popup de entrada esperando para ser exibido
+    # Caso o rerun não tenha acontecido, força após 2 segundos
+    if st.session_state.get('show_entry_popup') and not st.session_state.get('popup_rerun_attempted', False):
+        popup_timestamp = st.session_state.show_entry_popup.get('timestamp', 0)
+        time_since_popup = current_time - popup_timestamp
+        
+        # Se passou mais de 2 segundos e popup não foi exibido, força rerun
+        if time_since_popup > 2:
+            st.session_state.popup_rerun_attempted = True
+            logging.warning(f"⚠️ Popup não exibido após {time_since_popup:.1f}s - forçando rerun")
+            st.rerun()
+    else:
+        # Reseta flag quando popup é fechado
+        if not st.session_state.get('show_entry_popup') and st.session_state.get('popup_rerun_attempted'):
+            st.session_state.popup_rerun_attempted = False
+    
+    # AUTO-REFRESH A CADA 120 SEGUNDOS (2 minutos)
     time_since_last_refresh = current_time - st.session_state.last_auto_refresh
     
     # Se passou 120 segundos (2 minutos), força refresh
@@ -908,8 +933,11 @@ def register_access_async(person, distance, db_ops, face_state):
             # Força flag de atualização para recarregar dados nas outras páginas
             st.session_state.force_data_reload = True
             
+            # ✅ CORREÇÃO CRÍTICA: Marca que precisa fazer rerun para exibir popup
+            st.session_state.needs_rerun = True
+            
             # Log para debug
-            logging.info(f"✅ Entrada registrada para {person_name} - popup preparado para exibição")
+            logging.info(f"✅ Entrada registrada para {person_name} - popup preparado para exibição - rerun marcado")
         else:
             # Salva erro em session_state
             st.session_state.last_access_message = {
