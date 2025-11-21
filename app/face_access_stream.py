@@ -189,8 +189,6 @@ def face_access_stream_page():
                     st.session_state.show_entry_popup = None
                     # Limpa cache de dados para próxima atualização
                     clear_access_cache()
-                    # RESETA flag de auto-start para reiniciar stream após rerun
-                    st.session_state.auto_start_attempted = False
                     st.rerun()
             
             # Mensagem visual abaixo do popover
@@ -238,8 +236,6 @@ def face_access_stream_page():
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
                         clear_access_cache()
-                        # RESETA flag de auto-start para reiniciar stream após rerun
-                        st.session_state.auto_start_attempted = False
                         st.rerun()
             
             # Mensagem visual abaixo do popover
@@ -443,6 +439,7 @@ def face_access_stream_page():
     
     # Stream de vídeo
     st.markdown("### 📹 Câmera de Reconhecimento Facial")
+    st.caption("▶️ Para iniciar a câmera, clique em **START** no componente de vídeo abaixo.")
     
     # Configura stream com chave estável (popovers não interferem com o vídeo)
     stream_key = "face-recognition-stream"
@@ -462,146 +459,11 @@ def face_access_stream_page():
         async_processing=True,
     )
     
-    # Auto-start usando JavaScript ROBUSTO - funciona em primeira carga e reruns
-    # Usa timestamp único para evitar cache de JavaScript
-    auto_start_timestamp = int(time.time() * 1000)
-    
-    # Detecta se é a primeira carga ou rerun
-    if 'stream_first_load' not in st.session_state:
-        st.session_state.stream_first_load = True
-        is_first_load = True
-    else:
-        is_first_load = False
-    
+    # Informação clara: o navegador exige um clique do usuário para iniciar a câmera
     if not webrtc_ctx.state.playing:
-        # JavaScript SUPER ROBUSTO que funciona mesmo na primeira carga
-        auto_start_js = f"""
-        <script id="autostart_{auto_start_timestamp}">
-        (function() {{
-            let attempts = 0;
-            const maxAttempts = {30 if is_first_load else 15}; // Mais tentativas na primeira carga
-            const delayBetweenAttempts = {600 if is_first_load else 400}; // Mais tempo na primeira carga
-            const initialDelay = {1000 if is_first_load else 200}; // Espera mais na primeira carga
-            
-            function tryStartStream() {{
-                attempts++;
-                
-                // Log para debug
-                if (attempts === 1) {{
-                    console.log('🎥 Auto-start: Iniciando busca pelo botão START...');
-                }}
-                
-                // Tenta encontrar o botão de TODAS as formas possíveis
-                let startButton = null;
-                
-                // Método 1: Por texto do botão (mais confiável)
-                const allButtons = document.querySelectorAll('button');
-                for (let btn of allButtons) {{
-                    const text = btn.textContent.toUpperCase().trim();
-                    const visible = btn.offsetParent !== null; // Verifica se está visível
-                    
-                    if ((text.includes('START') || text.includes('INICIAR')) && visible) {{
-                        startButton = btn;
-                        console.log('🎥 Auto-start: Botão encontrado por texto (tentativa ' + attempts + ')');
-                        break;
-                    }}
-                }}
-                
-                // Método 2: Busca em iframes (webrtc pode estar em iframe)
-                if (!startButton) {{
-                    const iframes = document.querySelectorAll('iframe');
-                    for (let iframe of iframes) {{
-                        try {{
-                            const iframeButtons = iframe.contentDocument?.querySelectorAll('button');
-                            if (iframeButtons) {{
-                                for (let btn of iframeButtons) {{
-                                    const text = btn.textContent.toUpperCase().trim();
-                                    if (text.includes('START') || text.includes('INICIAR')) {{
-                                        startButton = btn;
-                                        console.log('🎥 Auto-start: Botão encontrado em iframe');
-                                        break;
-                                    }}
-                                }}
-                            }}
-                        }} catch (e) {{
-                            // Ignorar erros de CORS
-                        }}
-                        if (startButton) break;
-                    }}
-                }}
-                
-                // Método 3: Por atributos e classes
-                if (!startButton) {{
-                    const selectors = [
-                        'button[data-testid*="start"]',
-                        'button[aria-label*="start"]',
-                        'button[class*="start"]',
-                        'button[id*="start"]'
-                    ];
-                    for (let selector of selectors) {{
-                        startButton = document.querySelector(selector);
-                        if (startButton && startButton.offsetParent !== null) {{
-                            console.log('🎥 Auto-start: Botão encontrado por seletor: ' + selector);
-                            break;
-                        }}
-                        startButton = null;
-                    }}
-                }}
-                
-                // Se encontrou o botão, verifica se pode clicar
-                if (startButton) {{
-                    const isVisible = startButton.offsetParent !== null;
-                    const isEnabled = !startButton.disabled;
-                    const isClickable = isVisible && isEnabled;
-                    
-                    console.log('🎥 Auto-start: Botão - Visível: ' + isVisible + ', Habilitado: ' + isEnabled);
-                    
-                    if (isClickable) {{
-                        console.log('🎥 Auto-start: ✅ CLICANDO NO BOTÃO START!');
-                        startButton.click();
-                        
-                        // Verifica se realmente clicou depois de 1 segundo
-                        setTimeout(function() {{
-                            const stillNotPlaying = !document.querySelector('video[autoplay]');
-                            if (stillNotPlaying && attempts < maxAttempts) {{
-                                console.log('🎥 Auto-start: Click não funcionou, tentando novamente...');
-                                tryStartStream();
-                            }}
-                        }}, 1000);
-                        
-                        return true;
-                    }}
-                }}
-                
-                // Se não encontrou e ainda tem tentativas, tenta novamente
-                if (attempts < maxAttempts) {{
-                    console.log('🎥 Auto-start: Tentativa ' + attempts + ' de ' + maxAttempts + ' - Aguardando...');
-                    setTimeout(tryStartStream, delayBetweenAttempts);
-                }} else {{
-                    console.log('⚠️ Auto-start: ❌ Botão START não encontrado após ' + maxAttempts + ' tentativas');
-                    console.log('💡 Dica: Clique manualmente no botão START para iniciar');
-                }}
-                
-                return false;
-            }}
-            
-            // Inicia as tentativas após delay inicial
-            console.log('🎥 Auto-start: Aguardando ' + initialDelay + 'ms antes de iniciar...');
-            setTimeout(tryStartStream, initialDelay);
-        }})();
-        </script>
-        """
-        st.markdown(auto_start_js, unsafe_allow_html=True)
-        
-        if is_first_load:
-            st.info("⏳ **Inicializando câmera pela primeira vez...** (pode levar alguns segundos)")
-        else:
-            st.caption("⏳ Aguardando reinicialização da câmera...")
+        st.info("▶️ Para iniciar o reconhecimento facial, clique em **START** no componente de vídeo acima.")
     else:
-        st.success("✅ Câmera ativa - Monitorando entrada")
-        # Marca que já não é mais primeira carga
-        if st.session_state.stream_first_load:
-            st.session_state.stream_first_load = False
+        st.success("✅ Câmera ativa - monitorando entrada em tempo real.")
     
     # Sistema de notificações com toasts (funcionam junto com popovers)
     if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
@@ -663,8 +525,6 @@ def face_access_stream_page():
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
                         clear_access_cache()
-                        # RESETA flag de auto-start para reiniciar stream após rerun
-                        st.session_state.auto_start_attempted = False
                         st.rerun()
                     
                     if submit_register:
@@ -742,9 +602,6 @@ def face_access_stream_page():
                                     st.session_state.last_unknown_frame = None
                                     st.session_state.last_unknown_embedding = None
                                     st.session_state.force_data_reload = True
-                                    
-                                    # RESETA flag de auto-start para reiniciar stream após rerun
-                                    st.session_state.auto_start_attempted = False
                                     
                                     time.sleep(1)
                                     st.rerun()
@@ -866,9 +723,6 @@ def face_access_stream_page():
                                     "EXIT_REGISTERED_STREAM",
                                     f"Saída registrada manualmente via stream para '{person_name}' (ID: {person_id})"
                                 )
-                                
-                                # RESETA flag de auto-start para reiniciar stream após rerun
-                                st.session_state.auto_start_attempted = False
                                 
                                 time.sleep(1)
                                 st.rerun()
