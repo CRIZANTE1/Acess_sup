@@ -20,6 +20,7 @@ from app.data_operations import add_record, can_register_new_entry
 from app.utils import get_sao_paulo_time, clear_access_cache
 from app.logger import log_action
 from auth.auth_utils import get_user_display_name
+import logging
 
 # Configuração WebRTC para melhor compatibilidade
 RTC_CONFIGURATION = RTCConfiguration(
@@ -93,8 +94,28 @@ def face_access_stream_page():
     col_status, col_actions = st.columns([2, 1])
     
     with col_status:
-        status_placeholder = st.empty()
-        info_placeholder = st.empty()
+        # Exibe última mensagem de acesso (se houver)
+        if 'last_access_message' in st.session_state and st.session_state.last_access_message:
+            msg = st.session_state.last_access_message
+            msg_type = msg.get('type', 'info')
+            title = msg.get('title', '')
+            info = msg.get('info', '')
+            
+            if msg_type == 'success':
+                st.success(title)
+                if info:
+                    st.info(info)
+            elif msg_type == 'warning':
+                st.warning(title)
+                if info:
+                    st.info(info)
+            elif msg_type == 'error':
+                st.error(title)
+                if info:
+                    st.info(info)
+        else:
+            st.info("👁️ **Aguardando pessoas...**")
+            st.caption("Sistema monitorando entrada em tempo real")
     
     with col_actions:
         st.markdown("### ⚡ Ações Rápidas")
@@ -178,9 +199,10 @@ def face_access_stream_page():
                             img = draw_face_boxes_on_frame(img, faces_info, show_names=True)
                             
                             # Registra acesso (em thread separada para não travar o vídeo)
+                            # Salva informações no session_state para atualização posterior
                             threading.Thread(
                                 target=register_access_async,
-                                args=(person, distance, db_ops, status_placeholder, info_placeholder, face_state)
+                                args=(person, distance, db_ops, face_state)
                             ).start()
                     else:
                         # Detecta rostos mas não reconhece
@@ -413,7 +435,7 @@ def face_access_stream_page():
         """)
 
 
-def register_access_async(person, distance, db_ops, status_placeholder, info_placeholder, face_state):
+def register_access_async(person, distance, db_ops, face_state):
     """Registra acesso de forma assíncrona (não trava o vídeo)"""
     try:
         person_name = person.get('name', 'N/A')
@@ -456,8 +478,13 @@ def register_access_async(person, distance, db_ops, status_placeholder, info_pla
                             pass
             
             if recent_records:
-                status_placeholder.warning(f"⚠️ **{person_name} já foi registrado há menos de 2 minutos**")
-                info_placeholder.info(f"**Aguarde** {face_state.recognition_cooldown} segundos para novo registro.")
+                # Salva mensagem em session_state para exibição
+                st.session_state.last_access_message = {
+                    'type': 'warning',
+                    'title': f"⚠️ {person_name} já foi registrado há menos de 2 minutos",
+                    'info': f"Aguarde {face_state.recognition_cooldown} segundos para novo registro."
+                }
+                logging.warning(f"{person_name} tentou registrar novamente muito cedo")
                 return
                 
         except Exception as e:
@@ -471,8 +498,13 @@ def register_access_async(person, distance, db_ops, status_placeholder, info_pla
         )
         
         if not pode_registrar:
-            status_placeholder.warning(f"⚠️ **Entrada não registrada para {person_name}**")
-            info_placeholder.info(f"**Motivo:** {motivo}")
+            # Salva mensagem em session_state
+            st.session_state.last_access_message = {
+                'type': 'warning',
+                'title': f"⚠️ Entrada não registrada para {person_name}",
+                'info': motivo
+            }
+            logging.warning(f"Entrada não registrada para {person_name}: {motivo}")
             return
         
         # Registra entrada
@@ -509,15 +541,16 @@ def register_access_async(person, distance, db_ops, status_placeholder, info_pla
         )
         
         if success:
-            status_placeholder.success(f"✅ **ACESSO LIBERADO: {person_name}**")
-            info_placeholder.info(f"""
-            **Informações:**
-            - **Horário:** {now.strftime("%H:%M")}
-            - **Empresa:** {empresa if empresa else 'Não informada'}
-            - **Similaridade:** {(1 - distance) * 100:.1f}%
-            
-            ⏱️ **Próximo registro:** Após {face_state.recognition_cooldown} segundos
-            """)
+            # Salva mensagem de sucesso em session_state (não atualiza UI da thread)
+            st.session_state.last_access_message = {
+                'type': 'success',
+                'title': f"✅ ACESSO LIBERADO: {person_name}",
+                'info': f"""**Horário:** {now.strftime("%H:%M")}
+**Empresa:** {empresa if empresa else 'Não informada'}
+**Similaridade:** {(1 - distance) * 100:.1f}%
+
+⏱️ **Próximo registro:** Após {face_state.recognition_cooldown} segundos"""
+            }
             
             log_action(
                 "FACE_ACCESS_STREAM_GRANTED",
@@ -526,8 +559,18 @@ def register_access_async(person, distance, db_ops, status_placeholder, info_pla
             
             clear_access_cache()
         else:
-            status_placeholder.error(f"❌ Erro ao registrar entrada para {person_name}")
+            # Salva erro em session_state
+            st.session_state.last_access_message = {
+                'type': 'error',
+                'title': f"❌ Erro ao registrar entrada para {person_name}",
+                'info': "Tente novamente ou registre manualmente"
+            }
     
     except Exception as e:
-        status_placeholder.error(f"❌ Erro ao processar acesso: {e}")
+        # Salva erro em session_state (não atualiza UI da thread)
+        st.session_state.last_access_message = {
+            'type': 'error',
+            'title': "❌ Erro ao processar acesso",
+            'info': str(e)
+        }
 
