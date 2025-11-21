@@ -227,10 +227,16 @@ def face_access_stream_page():
         
         return av.VideoFrame.from_ndarray(img, format="bgr24")
     
+    # Força rerun se necessário (para atualizar popup e dados)
+    if st.session_state.get('needs_rerun', False):
+        st.session_state.needs_rerun = False
+        st.rerun()
+    
     # Exibe popup de entrada se houver
     if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
         popup = st.session_state.show_entry_popup
-        st.toast(f"✅ {popup['name']} entrou às {popup['time']}", icon="✅")
+        # Mostra popup com informações
+        st.toast(f"✅ ENTRADA REGISTRADA\n{popup['name']}\n{popup['time']} - {popup['company']}", icon="✅")
         # Limpa popup após mostrar
         st.session_state.show_entry_popup = None
     
@@ -387,6 +393,7 @@ def face_access_stream_page():
     
     with col3:
         try:
+            # FORÇA RELOAD SEM CACHE
             access_records = db_ops.load_access_records()
             today = get_sao_paulo_time().date()
             today_str = today.strftime("%d/%m/%Y")
@@ -412,6 +419,16 @@ def face_access_stream_page():
         except:
             today_records = []
         st.metric("Acessos Hoje", len(today_records))
+    
+    # Botão para forçar atualização manual
+    if st.button("🔄 Atualizar Dados", help="Clique para atualizar estatísticas"):
+        # Limpa todos os caches
+        if 'df_acesso_veiculos' in st.session_state:
+            del st.session_state['df_acesso_veiculos']
+        if 'access_records_cache' in st.session_state:
+            del st.session_state['access_records_cache']
+        clear_access_cache()
+        st.rerun()
     
     # Dicas e instruções
     with st.expander("💡 Dicas para Operadores"):
@@ -563,7 +580,8 @@ def register_access_async(person, distance, db_ops, face_state):
             st.session_state.show_entry_popup = {
                 'name': person_name,
                 'time': now.strftime("%H:%M"),
-                'company': empresa if empresa else 'Não informada'
+                'company': empresa if empresa else 'Não informada',
+                'timestamp': time.time()  # Para forçar atualização
             }
             
             log_action(
@@ -571,7 +589,20 @@ def register_access_async(person, distance, db_ops, face_state):
                 f"Acesso concedido via reconhecimento facial (stream) para '{person_name}' (ID: {person_id}, Distância: {distance:.4f})"
             )
             
+            # LIMPA TODOS OS CACHES DE DADOS
             clear_access_cache()
+            
+            # Limpa cache do session_state para forçar reload
+            if 'df_acesso_veiculos' in st.session_state:
+                del st.session_state['df_acesso_veiculos']
+            if 'access_records_cache' in st.session_state:
+                del st.session_state['access_records_cache']
+            if 'last_cache_update' in st.session_state:
+                del st.session_state['last_cache_update']
+            
+            # Força flag de atualização para recarregar dados
+            st.session_state.force_data_reload = True
+            st.session_state.needs_rerun = True
         else:
             # Salva erro em session_state
             st.session_state.last_access_message = {
