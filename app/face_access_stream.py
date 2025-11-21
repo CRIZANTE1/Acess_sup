@@ -382,6 +382,100 @@ def face_access_stream_page():
     
     st.markdown("---")
     
+    # Seção de Registro de Saída Manual
+    st.markdown("### 🚪 Registro de Saída Manual")
+    
+    with st.expander("📋 Pessoas Presentes (Registrar Saída)", expanded=False):
+        try:
+            # Busca registros de hoje sem saída
+            access_records = db_ops.load_access_records()
+            today = get_sao_paulo_time().date()
+            today_str = today.strftime("%d/%m/%Y")
+            
+            # Filtra pessoas que entraram hoje e ainda não saíram
+            present_people = []
+            for r in access_records:
+                record_date = r.get('data')
+                horario_saida = r.get('horario_saida')
+                
+                # Verifica se é de hoje
+                is_today = False
+                if record_date:
+                    try:
+                        from datetime import datetime
+                        if isinstance(record_date, str):
+                            if '/' in record_date:
+                                record_date_obj = datetime.strptime(record_date, "%d/%m/%Y").date()
+                            else:
+                                record_date_obj = datetime.fromisoformat(record_date.split('T')[0]).date()
+                        else:
+                            record_date_obj = record_date
+                        
+                        is_today = (record_date_obj == today)
+                    except:
+                        is_today = (str(record_date) == today_str)
+                
+                # Se é de hoje e não tem saída, adiciona
+                if is_today and (not horario_saida or horario_saida == '' or horario_saida == '-'):
+                    present_people.append(r)
+            
+            if present_people:
+                st.info(f"**{len(present_people)} pessoa(s) presente(s)** sem saída registrada")
+                
+                # Mostra lista de pessoas presentes
+                for person in present_people:
+                    person_id = person.get('id')
+                    person_name = person.get('name', 'N/A')
+                    entrada = person.get('horario_entrada', 'N/A')
+                    empresa = person.get('empresa', 'N/A')
+                    
+                    col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
+                    
+                    with col1:
+                        st.write(f"**{person_name}**")
+                    with col2:
+                        st.write(f"🕐 Entrada: {entrada}")
+                    with col3:
+                        st.write(f"🏢 {empresa}")
+                    with col4:
+                        if st.button(f"🚪 Registrar Saída", key=f"exit_{person_id}", type="secondary", use_container_width=True):
+                            # Registra horário de saída
+                            now = get_sao_paulo_time()
+                            horario_saida = now.strftime("%H:%M")
+                            
+                            # Atualiza registro
+                            from app.data_operations import update_exit_time
+                            success = update_exit_time(person_id, horario_saida)
+                            
+                            if success:
+                                st.success(f"✅ Saída registrada para {person_name} às {horario_saida}")
+                                
+                                # Limpa cache e recarrega
+                                clear_access_cache()
+                                if 'df_acesso_veiculos' in st.session_state:
+                                    del st.session_state['df_acesso_veiculos']
+                                if 'access_records_cache' in st.session_state:
+                                    del st.session_state['access_records_cache']
+                                
+                                log_action(
+                                    "EXIT_REGISTERED_STREAM",
+                                    f"Saída registrada manualmente via stream para '{person_name}' (ID: {person_id})"
+                                )
+                                
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Erro ao registrar saída para {person_name}")
+                    
+                    st.divider()
+            else:
+                st.info("✅ Nenhuma pessoa presente no momento (todos já registraram saída)")
+        
+        except Exception as e:
+            st.error(f"Erro ao buscar pessoas presentes: {e}")
+    
+    st.markdown("---")
+    
     # Estatísticas
     st.markdown("### 📊 Estatísticas do Sistema")
     col1, col2, col3 = st.columns(3)
