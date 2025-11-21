@@ -33,6 +33,7 @@ class FaceRecognitionState:
         self.last_recognized_person = None
         self.last_recognized_person_id = None  # ID da última pessoa reconhecida
         self.last_recognition_time = 0
+        self.last_unknown_time = 0  # Timestamp do último desconhecido
         self.recognition_cooldown = 30  # AUMENTADO: 30 segundos entre reconhecimentos (era 5)
         self.lock = threading.Lock()
         self.frame_count = 0
@@ -218,6 +219,13 @@ def face_access_stream_page():
                             st.session_state.last_unknown_frame = img.copy()
                             st.session_state.last_unknown_embedding = detected_faces[0]['embedding']
                             
+                            # Marca que detectou pessoa desconhecida (para popup)
+                            if not st.session_state.get('unknown_already_shown', False):
+                                st.session_state.show_unknown_popup = True
+                                st.session_state.unknown_already_shown = True
+                                # Reseta flag após 10 segundos (permite novo alerta)
+                                face_state.last_unknown_time = current_time
+                            
                             # Desenha caixas vermelhas para rostos não reconhecidos
                             faces_info = [{
                                 'bbox': face['bbox'],
@@ -225,16 +233,16 @@ def face_access_stream_page():
                                 'confidence': face['confidence']
                             } for face in detected_faces]
                             img = draw_face_boxes_on_frame(img, faces_info, show_names=True)
+                        else:
+                            # Nenhum rosto detectado, reseta flag de unknown
+                            if current_time - getattr(face_state, 'last_unknown_time', 0) > 10:
+                                if 'unknown_already_shown' in st.session_state:
+                                    st.session_state.unknown_already_shown = False
         
         except Exception as e:
             st.error(f"Erro no processamento: {e}")
         
         return av.VideoFrame.from_ndarray(img, format="bgr24")
-    
-    # Força rerun se necessário (para atualizar popup e dados)
-    if st.session_state.get('needs_rerun', False):
-        st.session_state.needs_rerun = False
-        st.rerun()
     
     # Exibe popup de entrada se houver
     if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
@@ -243,6 +251,12 @@ def face_access_stream_page():
         st.toast(f"✅ ENTRADA REGISTRADA\n{popup['name']}\n{popup['time']} - {popup['company']}", icon="✅")
         # Limpa popup após mostrar
         st.session_state.show_entry_popup = None
+    
+    # Exibe popup de pessoa NÃO reconhecida se houver
+    if 'show_unknown_popup' in st.session_state and st.session_state.show_unknown_popup:
+        st.toast("⚠️ PESSOA NÃO RECONHECIDA\nCadastre rapidamente abaixo", icon="⚠️")
+        # Limpa popup após mostrar
+        st.session_state.show_unknown_popup = None
     
     # Stream de vídeo
     st.markdown("### 📹 Câmera de Reconhecimento Facial")
@@ -664,13 +678,17 @@ def register_access_async(person, distance, db_ops, face_state):
 ⏱️ **Próximo registro:** Após {face_state.recognition_cooldown} segundos"""
             }
             
-            # Salva notificação popup para exibir
+            # Salva notificação popup para exibir (SEMPRE cria novo)
             st.session_state.show_entry_popup = {
                 'name': person_name,
                 'time': now.strftime("%H:%M"),
                 'company': empresa if empresa else 'Não informada',
-                'timestamp': time.time()  # Para forçar atualização
+                'timestamp': time.time()  # Timestamp único para garantir atualização
             }
+            
+            # Reseta flag de unknown para permitir novos alertas
+            if 'unknown_already_shown' in st.session_state:
+                st.session_state.unknown_already_shown = False
             
             log_action(
                 "FACE_ACCESS_STREAM_GRANTED",
