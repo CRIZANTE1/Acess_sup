@@ -30,8 +30,9 @@ RTC_CONFIGURATION = RTCConfiguration(
 class FaceRecognitionState:
     def __init__(self):
         self.last_recognized_person = None
+        self.last_recognized_person_id = None  # ID da última pessoa reconhecida
         self.last_recognition_time = 0
-        self.recognition_cooldown = 5  # segundos entre reconhecimentos
+        self.recognition_cooldown = 30  # AUMENTADO: 30 segundos entre reconhecimentos (era 5)
         self.lock = threading.Lock()
         self.frame_count = 0
         self.process_every_n_frames = 5  # Processa apenas a cada 5 frames (otimização)
@@ -152,23 +153,35 @@ def face_access_stream_page():
                         person_id = person.get('id')
                         person_name = person.get('name', 'N/A')
                         
-                        # Atualiza estado
-                        face_state.last_recognized_person = person
-                        face_state.last_recognition_time = current_time
-                        
-                        # Desenha caixa verde ao redor do rosto reconhecido
-                        faces_info = [{
-                            'bbox': bbox,
-                            'name': person_name,
-                            'confidence': 1.0 - distance
-                        }]
-                        img = draw_face_boxes_on_frame(img, faces_info, show_names=True)
-                        
-                        # Registra acesso (em thread separada para não travar o vídeo)
-                        threading.Thread(
-                            target=register_access_async,
-                            args=(person, distance, db_ops, status_placeholder, info_placeholder)
-                        ).start()
+                        # VERIFICAÇÃO ADICIONAL: Não processa se for a mesma pessoa que acabou de reconhecer
+                        if person_id == face_state.last_recognized_person_id:
+                            # Mesma pessoa, pula processamento mas desenha caixa
+                            faces_info = [{
+                                'bbox': bbox,
+                                'name': f"{person_name} (Já registrado)",
+                                'confidence': 1.0 - distance
+                            }]
+                            img = draw_face_boxes_on_frame(img, faces_info, show_names=True)
+                        else:
+                            # Pessoa diferente da última, processa normalmente
+                            # Atualiza estado
+                            face_state.last_recognized_person = person
+                            face_state.last_recognized_person_id = person_id
+                            face_state.last_recognition_time = current_time
+
+                            # Desenha caixa verde ao redor do rosto reconhecido
+                            faces_info = [{
+                                'bbox': bbox,
+                                'name': person_name,
+                                'confidence': 1.0 - distance
+                            }]
+                            img = draw_face_boxes_on_frame(img, faces_info, show_names=True)
+                            
+                            # Registra acesso (em thread separada para não travar o vídeo)
+                            threading.Thread(
+                                target=register_access_async,
+                                args=(person, distance, db_ops, status_placeholder, info_placeholder, face_state)
+                            ).start()
                     else:
                         # Detecta rostos mas não reconhece
                         from app.face_recognition_utils import process_video_frame
@@ -400,7 +413,7 @@ def face_access_stream_page():
         """)
 
 
-def register_access_async(person, distance, db_ops, status_placeholder, info_placeholder):
+def register_access_async(person, distance, db_ops, status_placeholder, info_placeholder, face_state):
     """Registra acesso de forma assíncrona (não trava o vídeo)"""
     try:
         person_name = person.get('name', 'N/A')
@@ -408,7 +421,49 @@ def register_access_async(person, distance, db_ops, status_placeholder, info_pla
         person_company = person.get('company', '')
         person_id = person.get('id')
         
-        # Verifica se pode registrar nova entrada
+        # PROTEÇÃO EXTRA: Verifica última entrada no banco (últimos 2 minutos)
+        try:
+            access_records = db_ops.load_access_records()
+            now = get_sao_paulo_time()
+            
+            # Filtra registros desta pessoa nas últimas 2 minutos
+            recent_records = []
+            for r in access_records:
+                if r.get('person_id') == person_id or r.get('name', '').lower() == person_name.lower():
+                    # Verifica se é recente (últimos 2 minutos)
+                    record_time_str = r.get('horario_entrada')
+                    record_date_str = r.get('data')
+                    
+                    if record_time_str and record_date_str:
+                        try:
+                            from datetime import datetime, timedelta
+                            
+                            # Converte string de data e hora para datetime
+                            if '/' in record_date_str:
+                                record_datetime_str = f"{record_date_str} {record_time_str}"
+                                record_datetime = datetime.strptime(record_datetime_str, "%d/%m/%Y %H:%M")
+                            else:
+                                # Tenta formato ISO
+                                record_datetime = datetime.fromisoformat(record_date_str.split('T')[0])
+                            
+                            # Calcula diferença
+                            time_diff = (now - record_datetime.replace(tzinfo=now.tzinfo)).total_seconds()
+                            
+                            # Se foi nos últimos 2 minutos (120 segundos)
+                            if time_diff < 120:
+                                recent_records.append(r)
+                        except:
+                            pass
+            
+            if recent_records:
+                status_placeholder.warning(f"⚠️ **{person_name} já foi registrado há menos de 2 minutos**")
+                info_placeholder.info(f"**Aguarde** {face_state.recognition_cooldown} segundos para novo registro.")
+                return
+                
+        except Exception as e:
+            logging.error(f"Erro ao verificar registros recentes: {e}")
+        
+        # Verifica se pode registrar nova entrada (validação padrão)
         pode_registrar, motivo = can_register_new_entry(
             person_id=person_id,
             person_name=person_name,
@@ -460,6 +515,8 @@ def register_access_async(person, distance, db_ops, status_placeholder, info_pla
             - **Horário:** {now.strftime("%H:%M")}
             - **Empresa:** {empresa if empresa else 'Não informada'}
             - **Similaridade:** {(1 - distance) * 100:.1f}%
+            
+            ⏱️ **Próximo registro:** Após {face_state.recognition_cooldown} segundos
             """)
             
             log_action(
