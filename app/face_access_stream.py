@@ -420,16 +420,6 @@ def face_access_stream_page():
             today_records = []
         st.metric("Acessos Hoje", len(today_records))
     
-    # Botão para forçar atualização manual
-    if st.button("🔄 Atualizar Dados", help="Clique para atualizar estatísticas"):
-        # Limpa todos os caches
-        if 'df_acesso_veiculos' in st.session_state:
-            del st.session_state['df_acesso_veiculos']
-        if 'access_records_cache' in st.session_state:
-            del st.session_state['access_records_cache']
-        clear_access_cache()
-        st.rerun()
-    
     # Dicas e instruções
     with st.expander("💡 Dicas para Operadores"):
         st.markdown("""
