@@ -76,12 +76,24 @@ def face_access_stream_page():
         st.error(error_msg)
         return
     
-    # Inicializa estado
+    # Inicializa estado (persistente no session_state para evitar duplicações após rerun)
     if 'face_state' not in st.session_state:
         st.session_state.face_state = FaceRecognitionState()
     
+    # Persiste informações de reconhecimento no session_state (sobrevive a reruns)
+    if 'last_recognized_person_id_persistent' not in st.session_state:
+        st.session_state.last_recognized_person_id_persistent = None
+    if 'last_recognition_time_persistent' not in st.session_state:
+        st.session_state.last_recognition_time_persistent = 0
+    
     db_ops = SupabaseOperations()
     face_state = st.session_state.face_state
+    
+    # Sincroniza estado persistente com face_state (para manter compatibilidade)
+    if st.session_state.last_recognized_person_id_persistent:
+        face_state.last_recognized_person_id = st.session_state.last_recognized_person_id_persistent
+    if st.session_state.last_recognition_time_persistent > 0:
+        face_state.last_recognition_time = st.session_state.last_recognition_time_persistent
     
     st.markdown("""
     ### Como Funciona
@@ -95,19 +107,24 @@ def face_access_stream_page():
     ---
     """)
     
-    # Área de status e últimas detecções com POPOVERS
+    # Área de status e últimas detecções com ALERTAS DESTACADOS
     col_status, col_actions = st.columns([2, 1])
     
     with col_status:
-        # POPOVER para entrada reconhecida (sempre visível quando há notificação)
+        # ALERTA DESTACADO para entrada reconhecida (sempre visível quando há notificação)
         if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
             popup = st.session_state.show_entry_popup
             
-            with st.popover("🟢 ✅ **ENTRADA REGISTRADA** - Clique para ver detalhes", use_container_width=True):
-                st.success(f"**{popup['name']}**")
-                st.info(f"🕐 **Horário:** {popup['time']}")
-                st.info(f"🏢 **Empresa:** {popup['company']}")
-                if st.button("✓ OK - Fechar", key=f"close_popup_{popup.get('timestamp', 0)}", use_container_width=True):
+            # Container destacado com informações
+            with st.container():
+                st.success("🟢 ✅ **ENTRADA REGISTRADA**")
+                st.markdown(f"""
+                **👤 Nome:** {popup['name']}  
+                **🕐 Horário:** {popup['time']}  
+                **🏢 Empresa:** {popup['company']}
+                """)
+                
+                if st.button("✓ OK - Fechar", key=f"close_popup_{popup.get('timestamp', 0)}", type="primary", use_container_width=True):
                     # Limpa cache e atualiza dados
                     clear_access_cache()
                     if 'df_acesso_veiculos' in st.session_state:
@@ -116,23 +133,25 @@ def face_access_stream_page():
                         del st.session_state['access_records_cache']
                     st.session_state.force_data_reload = True
                     st.session_state.show_entry_popup = None
+                    # Marca que precisa reiniciar stream
+                    st.session_state.needs_stream_restart = True
+                    st.session_state.auto_start_attempted = False
                     st.rerun()
         
-        # POPOVER para pessoa NÃO reconhecida
+        # ALERTA DESTACADO para pessoa NÃO reconhecida
         elif 'show_unknown_popup' in st.session_state and st.session_state.show_unknown_popup:
-            with st.popover("🔴 ⚠️ **PESSOA NÃO RECONHECIDA** - Clique para ação", use_container_width=True):
-                st.warning("**Pessoa desconhecida detectada!**")
+            with st.container():
+                st.warning("🔴 ⚠️ **PESSOA NÃO RECONHECIDA DETECTADA!**")
                 st.info("👤 Uma pessoa não cadastrada passou pela câmera")
                 
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    if st.button("📝 Cadastrar Agora", type="primary", use_container_width=True):
+                    if st.button("📝 Cadastrar Agora", key="register_unknown_now", type="primary", use_container_width=True):
                         st.session_state.show_quick_register = True
                         st.session_state.show_unknown_popup = None
-                        # Não limpa cache aqui pois vai abrir formulário de cadastro
                         st.rerun()
                 with col_b:
-                    if st.button("✓ Ignorar", use_container_width=True):
+                    if st.button("✓ Ignorar", key="ignore_unknown", use_container_width=True):
                         # Limpa cache e atualiza dados
                         clear_access_cache()
                         if 'df_acesso_veiculos' in st.session_state:
@@ -143,6 +162,9 @@ def face_access_stream_page():
                         st.session_state.show_unknown_popup = None
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
+                        # Marca que precisa reiniciar stream
+                        st.session_state.needs_stream_restart = True
+                        st.session_state.auto_start_attempted = False
                         st.rerun()
         
         # Exibe última mensagem de acesso (se houver)
@@ -182,12 +204,12 @@ def face_access_stream_page():
         if st.session_state.stream_paused:
             st.warning("⏸️ Reconhecimento pausado")
         
-        # Histórico de últimas entradas (popover)
+        # Histórico de últimas entradas (expander)
         if 'entry_history' not in st.session_state:
             st.session_state.entry_history = []
         
         if st.session_state.entry_history:
-            with st.popover("📋 Últimas Entradas", use_container_width=True):
+            with st.expander("📋 Últimas Entradas", expanded=False):
                 st.markdown("### 📊 Histórico Recente")
                 for idx, entry in enumerate(st.session_state.entry_history[-5:]):
                     st.success(f"✅ **{entry['name']}**")
@@ -239,8 +261,15 @@ def face_access_stream_page():
                         person_name = person.get('name', 'N/A')
                         
                         # VERIFICAÇÃO ADICIONAL: Não processa se for a mesma pessoa que acabou de reconhecer
-                        if person_id == face_state.last_recognized_person_id:
-                            # Mesma pessoa, pula processamento mas desenha caixa
+                        # Usa estado persistente que sobrevive a reruns
+                        last_id_persistent = st.session_state.get('last_recognized_person_id_persistent')
+                        last_time_persistent = st.session_state.get('last_recognition_time_persistent', 0)
+                        time_since_last_persistent = current_time - last_time_persistent
+                        
+                        # Verifica se é a mesma pessoa E se ainda está no cooldown (mesmo após rerun)
+                        if (person_id == last_id_persistent and 
+                            time_since_last_persistent < face_state.recognition_cooldown):
+                            # Mesma pessoa recente, pula processamento mas desenha caixa
                             faces_info = [{
                                 'bbox': bbox,
                                 'name': f"{person_name} (Já registrado)",
@@ -248,11 +277,15 @@ def face_access_stream_page():
                             }]
                             img = draw_face_boxes_on_frame(img, faces_info, show_names=True)
                         else:
-                            # Pessoa diferente da última, processa normalmente
-                            # Atualiza estado
+                            # Pessoa diferente OU passou tempo suficiente, processa normalmente
+                            # Atualiza estado (tanto face_state quanto session_state persistente)
                             face_state.last_recognized_person = person
                             face_state.last_recognized_person_id = person_id
                             face_state.last_recognition_time = current_time
+                            
+                            # PERSISTE no session_state para sobreviver a reruns
+                            st.session_state.last_recognized_person_id_persistent = person_id
+                            st.session_state.last_recognition_time_persistent = current_time
 
                             # Desenha caixa verde ao redor do rosto reconhecido
                             faces_info = [{
@@ -284,7 +317,7 @@ def face_access_stream_page():
                             st.session_state.last_unknown_frame = img.copy()
                             st.session_state.last_unknown_embedding = detected_faces[0]['embedding']
                             
-                            # Marca que detectou pessoa desconhecida (ativa popover)
+                            # Marca que detectou pessoa desconhecida (ativa alerta)
                             if not st.session_state.get('unknown_popup_shown', False):
                                 st.session_state.show_unknown_popup = True
                                 st.session_state.unknown_popup_shown = True
@@ -311,14 +344,21 @@ def face_access_stream_page():
     
     # Stream de vídeo
     st.markdown("### 📹 Câmera de Reconhecimento Facial")
-    st.caption("🔄 O stream inicia automaticamente. Aguarde alguns segundos...")
     
-    # Configura auto-start do stream (inicia automaticamente após rerun)
-    if 'stream_started' not in st.session_state:
-        st.session_state.stream_started = True
+    # Configura auto-start do stream
+    # Usa uma chave estável mas força reinício após reruns importantes
+    stream_key = "face-recognition-stream"
+    
+    # Se houve rerun após fechar alerta, força reinício do stream
+    if st.session_state.get('needs_stream_restart', False):
+        # Muda a chave para forçar recriação do componente
+        stream_key = f"face-recognition-stream-restart-{int(time.time())}"
+        st.session_state.needs_stream_restart = False
+    
+    st.caption("🔄 O stream inicia automaticamente. Clique em 'START' se necessário.")
     
     webrtc_ctx = webrtc_streamer(
-        key="face-recognition-stream",
+        key=stream_key,
         mode=WebRtcMode.SENDRECV,
         rtc_configuration=RTC_CONFIGURATION,
         video_frame_callback=video_frame_callback,
@@ -330,8 +370,25 @@ def face_access_stream_page():
             "audio": False,
         },
         async_processing=True,
-        desired_playing_state=True,  # AUTO-START: Inicia stream automaticamente
     )
+    
+    # Auto-start usando JavaScript (executa após renderização)
+    if webrtc_ctx.state.playing is False and not st.session_state.get('auto_start_attempted', False):
+        # Marca que tentou auto-start para evitar loops
+        st.session_state.auto_start_attempted = True
+        
+        # Usa HTML/JS para clicar no botão START automaticamente
+        auto_start_js = """
+        <script>
+        setTimeout(function() {
+            var startButton = document.querySelector('button[title*="Start"], button:contains("Start")');
+            if (startButton && !startButton.disabled) {
+                startButton.click();
+            }
+        }, 1000);
+        </script>
+        """
+        st.markdown(auto_start_js, unsafe_allow_html=True)
     
     # Exibe toast para notificações (reforço visual)
     if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
@@ -351,7 +408,7 @@ def face_access_stream_page():
         if 'unknown_toast_shown' in st.session_state:
             st.session_state.unknown_toast_shown = False
     
-    # Força rerun se necessário (para atualizar popovers)
+    # Força rerun se necessário (para atualizar alertas)
     if st.session_state.get('needs_rerun', False):
         st.session_state.needs_rerun = False
         st.rerun()
@@ -402,6 +459,9 @@ def face_access_stream_page():
                         st.session_state.show_quick_register = False
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
+                        # Marca que precisa reiniciar stream
+                        st.session_state.needs_stream_restart = True
+                        st.session_state.auto_start_attempted = False
                         st.rerun()
                     
                     if submit_register:
@@ -477,6 +537,10 @@ def face_access_stream_page():
                                     st.session_state.show_quick_register = False
                                     st.session_state.last_unknown_frame = None
                                     st.session_state.last_unknown_embedding = None
+                                    
+                                    # Marca que precisa reiniciar stream
+                                    st.session_state.needs_stream_restart = True
+                                    st.session_state.auto_start_attempted = False
                                     
                                     time.sleep(2)
                                     st.rerun()
