@@ -107,42 +107,47 @@ def face_access_stream_page():
     ---
     """)
     
-    # Área de status e últimas detecções com ALERTAS DESTACADOS
+    # Área de status e últimas detecções com POPOVERS
     col_status, col_actions = st.columns([2, 1])
     
     with col_status:
-        # ALERTA DESTACADO para entrada reconhecida (sempre visível quando há notificação)
+        # POPOVER para entrada reconhecida (mais estável que banners)
         if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
             popup = st.session_state.show_entry_popup
             
-            # Container destacado com informações
-            with st.container():
-                st.success("🟢 ✅ **ENTRADA REGISTRADA**")
+            # Usa popover ao invés de banner
+            with st.popover("🟢 ✅ **ENTRADA REGISTRADA** - Clique aqui", use_container_width=True):
                 st.markdown(f"""
+                ### ✅ Entrada Registrada com Sucesso!
+                
                 **👤 Nome:** {popup['name']}  
                 **🕐 Horário:** {popup['time']}  
                 **🏢 Empresa:** {popup['company']}
+                
+                ---
                 """)
                 
-                if st.button("✓ OK - Fechar", key=f"close_popup_{popup.get('timestamp', 0)}", type="primary", use_container_width=True):
-                    # Limpa cache e atualiza dados
-                    clear_access_cache()
-                    if 'df_acesso_veiculos' in st.session_state:
-                        del st.session_state['df_acesso_veiculos']
-                    if 'access_records_cache' in st.session_state:
-                        del st.session_state['access_records_cache']
-                    st.session_state.force_data_reload = True
+                if st.button("✓ OK - Fechar Notificação", key=f"close_popup_{popup.get('timestamp', 0)}", type="primary", use_container_width=True):
+                    # Limpa apenas o popup, mantém stream ativo
                     st.session_state.show_entry_popup = None
-                    # Marca que precisa reiniciar stream
-                    st.session_state.needs_stream_restart = True
-                    st.session_state.auto_start_attempted = False
+                    # Limpa cache de dados para próxima atualização
+                    clear_access_cache()
                     st.rerun()
+            
+            # Mensagem visual abaixo do popover
+            st.success(f"✅ Última entrada: **{popup['name']}** às {popup['time']}")
         
-        # ALERTA DESTACADO para pessoa NÃO reconhecida
+        # POPOVER para pessoa NÃO reconhecida
         elif 'show_unknown_popup' in st.session_state and st.session_state.show_unknown_popup:
-            with st.container():
-                st.warning("🔴 ⚠️ **PESSOA NÃO RECONHECIDA DETECTADA!**")
-                st.info("👤 Uma pessoa não cadastrada passou pela câmera")
+            # Usa popover ao invés de banner
+            with st.popover("🔴 ⚠️ **PESSOA NÃO RECONHECIDA** - Clique aqui", use_container_width=True):
+                st.markdown("""
+                ### ⚠️ Pessoa Não Reconhecida Detectada!
+                
+                👤 Uma pessoa não cadastrada passou pela câmera.
+                
+                **Escolha uma ação:**
+                """)
                 
                 col_a, col_b = st.columns(2)
                 with col_a:
@@ -152,40 +157,48 @@ def face_access_stream_page():
                         st.rerun()
                 with col_b:
                     if st.button("✓ Ignorar", key="ignore_unknown", use_container_width=True):
-                        # Limpa cache e atualiza dados
-                        clear_access_cache()
-                        if 'df_acesso_veiculos' in st.session_state:
-                            del st.session_state['df_acesso_veiculos']
-                        if 'access_records_cache' in st.session_state:
-                            del st.session_state['access_records_cache']
-                        st.session_state.force_data_reload = True
+                        # Limpa popup e dados temporários, mantém stream ativo
                         st.session_state.show_unknown_popup = None
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
-                        # Marca que precisa reiniciar stream
-                        st.session_state.needs_stream_restart = True
-                        st.session_state.auto_start_attempted = False
+                        clear_access_cache()
                         st.rerun()
+            
+            # Mensagem visual abaixo do popover
+            st.warning("⚠️ Pessoa não reconhecida detectada - clique no botão acima para mais ações")
         
-        # Exibe última mensagem de acesso (se houver)
+        # Exibe última mensagem de acesso (se houver) - também em popover
         elif 'last_access_message' in st.session_state and st.session_state.last_access_message:
             msg = st.session_state.last_access_message
             msg_type = msg.get('type', 'info')
             title = msg.get('title', '')
             info = msg.get('info', '')
             
+            # Determina ícone e cor
+            icon = "ℹ️"
+            if msg_type == 'success':
+                icon = "✅"
+            elif msg_type == 'warning':
+                icon = "⚠️"
+            elif msg_type == 'error':
+                icon = "❌"
+            
+            with st.popover(f"{icon} **Notificação do Sistema** - Clique aqui", use_container_width=True):
+                st.markdown(f"### {icon} {title}")
+                if info:
+                    st.info(info)
+                
+                if st.button("✓ OK - Fechar", key="close_last_msg", type="primary"):
+                    st.session_state.last_access_message = None
+                    st.rerun()
+            
+            # Mensagem visual abaixo do popover
             if msg_type == 'success':
                 st.success(title)
-                if info:
-                    st.info(info)
             elif msg_type == 'warning':
                 st.warning(title)
-                if info:
-                    st.info(info)
             elif msg_type == 'error':
                 st.error(title)
-                if info:
-                    st.info(info)
         else:
             st.info("👁️ **Aguardando pessoas...**")
             st.caption("Sistema monitorando entrada em tempo real")
@@ -345,16 +358,8 @@ def face_access_stream_page():
     # Stream de vídeo
     st.markdown("### 📹 Câmera de Reconhecimento Facial")
     
-    # Configura auto-start do stream
-    # Usa uma chave estável mas força reinício após reruns importantes
+    # Configura stream com chave estável (popovers não interferem com o vídeo)
     stream_key = "face-recognition-stream"
-    
-    # Se houve rerun após fechar alerta, força reinício do stream
-    if st.session_state.get('needs_stream_restart', False):
-        # Muda a chave para forçar recriação do componente
-        stream_key = f"face-recognition-stream-restart-{int(time.time())}"
-        st.session_state.needs_stream_restart = False
-    
     st.caption("🔄 O stream inicia automaticamente. Clique em 'START' se necessário.")
     
     webrtc_ctx = webrtc_streamer(
@@ -390,28 +395,24 @@ def face_access_stream_page():
         """
         st.markdown(auto_start_js, unsafe_allow_html=True)
     
-    # Exibe toast para notificações (reforço visual)
+    # Sistema de notificações com toasts (funcionam junto com popovers)
     if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
         popup = st.session_state.show_entry_popup
         # Verifica se já foi mostrado o toast (evita duplicação)
-        if not st.session_state.get(f"toast_shown_{popup.get('timestamp', 0)}", False):
-            st.toast(f"✅ ENTRADA: {popup['name']} - {popup['time']}", icon="✅")
-            st.session_state[f"toast_shown_{popup.get('timestamp', 0)}"] = True
+        toast_key = f"toast_shown_{popup.get('timestamp', 0)}"
+        if not st.session_state.get(toast_key, False):
+            st.toast(f"✅ ENTRADA REGISTRADA: {popup['name']} - {popup['time']}", icon="✅")
+            st.session_state[toast_key] = True
     
     if 'show_unknown_popup' in st.session_state and st.session_state.show_unknown_popup:
         # Verifica se já foi mostrado o toast
         if not st.session_state.get('unknown_toast_shown', False):
-            st.toast("⚠️ PESSOA NÃO RECONHECIDA - Clique no aviso acima", icon="⚠️")
+            st.toast("⚠️ PESSOA NÃO RECONHECIDA - Clique no botão acima", icon="⚠️")
             st.session_state.unknown_toast_shown = True
     else:
         # Reseta flag quando popup é fechado
         if 'unknown_toast_shown' in st.session_state:
-            st.session_state.unknown_toast_shown = False
-    
-    # Força rerun se necessário (para atualizar alertas)
-    if st.session_state.get('needs_rerun', False):
-        st.session_state.needs_rerun = False
-        st.rerun()
+            del st.session_state.unknown_toast_shown
     
     # Formulário de cadastro rápido (se solicitado)
     if st.session_state.get('show_quick_register', False):
@@ -449,19 +450,11 @@ def face_access_stream_page():
                         cancel_register = st.form_submit_button("❌ Cancelar", use_container_width=True)
                     
                     if cancel_register:
-                        # Limpa cache e atualiza dados
-                        clear_access_cache()
-                        if 'df_acesso_veiculos' in st.session_state:
-                            del st.session_state['df_acesso_veiculos']
-                        if 'access_records_cache' in st.session_state:
-                            del st.session_state['access_records_cache']
-                        st.session_state.force_data_reload = True
+                        # Limpa estado de cadastro rápido
                         st.session_state.show_quick_register = False
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
-                        # Marca que precisa reiniciar stream
-                        st.session_state.needs_stream_restart = True
-                        st.session_state.auto_start_attempted = False
+                        clear_access_cache()
                         st.rerun()
                     
                     if submit_register:
@@ -525,24 +518,16 @@ def face_access_stream_page():
                                         f"Cadastro rápido via stream: '{quick_name.strip()}' (ID: {new_person_id})"
                                     )
                                     
-                                    # Limpa TODOS os caches
+                                    # Limpa caches
                                     clear_access_cache()
-                                    if 'df_acesso_veiculos' in st.session_state:
-                                        del st.session_state['df_acesso_veiculos']
-                                    if 'access_records_cache' in st.session_state:
-                                        del st.session_state['access_records_cache']
-                                    st.session_state.force_data_reload = True
                                     
-                                    # Limpa estado
+                                    # Limpa estado de cadastro
                                     st.session_state.show_quick_register = False
                                     st.session_state.last_unknown_frame = None
                                     st.session_state.last_unknown_embedding = None
+                                    st.session_state.force_data_reload = True
                                     
-                                    # Marca que precisa reiniciar stream
-                                    st.session_state.needs_stream_restart = True
-                                    st.session_state.auto_start_attempted = False
-                                    
-                                    time.sleep(2)
+                                    time.sleep(1)
                                     st.rerun()
                                 else:
                                     st.error("Pessoa cadastrada, mas erro ao registrar entrada.")
@@ -551,6 +536,27 @@ def face_access_stream_page():
         else:
             st.warning("Nenhuma imagem capturada. Aguarde detecção de pessoa não reconhecida.")
             st.session_state.show_quick_register = False
+    
+    # Auto-refresh para atualizar popovers quando houver novos registros
+    # Verifica a cada 2 segundos se há novas notificações pendentes
+    if 'last_refresh_check' not in st.session_state:
+        st.session_state.last_refresh_check = time.time()
+    
+    current_time = time.time()
+    time_since_check = current_time - st.session_state.last_refresh_check
+    
+    # Se passou mais de 2 segundos, verifica se há notificações pendentes
+    if time_since_check > 2:
+        st.session_state.last_refresh_check = current_time
+        
+        # Se há popup pendente mas ainda não foi exibido, força rerun
+        if (st.session_state.get('show_entry_popup') or 
+            st.session_state.get('show_unknown_popup') or 
+            st.session_state.get('last_access_message')):
+            
+            # Só faz rerun se o webrtc está ativo (para não interferir com inicialização)
+            if webrtc_ctx and webrtc_ctx.state.playing:
+                st.rerun()
     
     st.markdown("---")
     
@@ -826,25 +832,20 @@ def register_access_async(person, distance, db_ops, face_state):
         )
         
         if success:
-            # Salva mensagem de sucesso em session_state (não atualiza UI da thread)
-            st.session_state.last_access_message = {
-                'type': 'success',
-                'title': f"✅ ACESSO LIBERADO: {person_name}",
-                'info': f"""**Horário:** {now.strftime("%H:%M")}
-**Empresa:** {empresa if empresa else 'Não informada'}
-**Similaridade:** {(1 - distance) * 100:.1f}%
-
-⏱️ **Próximo registro:** Após {face_state.recognition_cooldown} segundos"""
-            }
-            
-            # Salva notificação popup para exibir
+            # Salva notificação popup para exibir (PRIORIDADE)
             entry_data = {
                 'name': person_name,
                 'time': now.strftime("%H:%M"),
                 'company': empresa if empresa else 'Não informada',
-                'timestamp': time.time()  # Para forçar atualização
+                'timestamp': time.time()  # Para forçar atualização única
             }
+            
+            # CRÍTICO: Configura popup ANTES de qualquer outra operação
             st.session_state.show_entry_popup = entry_data
+            
+            # Limpa mensagens antigas que podem interferir
+            if 'last_access_message' in st.session_state:
+                del st.session_state['last_access_message']
             
             # Adiciona ao histórico de entradas (mantém últimas 10)
             if 'entry_history' not in st.session_state:
@@ -863,16 +864,17 @@ def register_access_async(person, distance, db_ops, face_state):
             clear_access_cache()
             
             # Limpa cache do session_state para forçar reload
-            if 'df_acesso_veiculos' in st.session_state:
-                del st.session_state['df_acesso_veiculos']
-            if 'access_records_cache' in st.session_state:
-                del st.session_state['access_records_cache']
-            if 'last_cache_update' in st.session_state:
-                del st.session_state['last_cache_update']
+            keys_to_delete = ['df_acesso_veiculos', 'access_records_cache', 'last_cache_update']
+            for key in keys_to_delete:
+                if key in st.session_state:
+                    del st.session_state[key]
             
-            # Força flag de atualização para recarregar dados
+            # Força flag de atualização para recarregar dados E mostrar popover
             st.session_state.force_data_reload = True
             st.session_state.needs_rerun = True
+            
+            # Log para debug
+            logging.info(f"✅ Popover configurado para {person_name} - timestamp: {entry_data['timestamp']}")
         else:
             # Salva erro em session_state
             st.session_state.last_access_message = {
