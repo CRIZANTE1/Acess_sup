@@ -360,9 +360,8 @@ def face_access_stream_page():
     
     # Stream de vídeo
     st.markdown("### 📹 Câmera de Reconhecimento Facial")
-    st.caption("▶️ Para iniciar a câmera, clique em **START** no componente de vídeo abaixo.")
     
-    # Configura stream com chave estável (popovers não interferem com o vídeo)
+    # Configura stream com chave estável
     stream_key = "face-recognition-stream"
     
     webrtc_ctx = webrtc_streamer(
@@ -380,13 +379,69 @@ def face_access_stream_page():
         async_processing=True,
     )
     
-    # Informação clara: o navegador exige um clique do usuário para iniciar a câmera
-    if not webrtc_ctx.state.playing:
-        st.info("▶️ Para iniciar o reconhecimento facial, clique em **START** no componente de vídeo acima.")
-    else:
-        st.success("✅ Câmera ativa - monitorando entrada em tempo real.")
+    # Status da câmera com instrução se necessário
+    col_cam_status, col_refresh_timer = st.columns([2, 1])
     
-    # Sistema de notificações com toasts (funcionam junto com popovers)
+    with col_cam_status:
+        if webrtc_ctx.state.playing:
+            st.success("✅ **Câmera Ativa** - Monitorando entrada em tempo real")
+        else:
+            st.error("🔴 **Câmera Inativa** - Clique em **START** no vídeo acima para iniciar")
+    
+    with col_refresh_timer:
+        # Inicializa timer de refresh se não existir
+        if 'last_auto_refresh' not in st.session_state:
+            st.session_state.last_auto_refresh = time.time()
+        
+        # Calcula tempo desde último refresh
+        time_since_refresh = time.time() - st.session_state.last_auto_refresh
+        time_until_refresh = max(0, 120 - time_since_refresh)
+        
+        # Mostra contador pequeno
+        if time_until_refresh > 0:
+            minutes = int(time_until_refresh // 60)
+            seconds = int(time_until_refresh % 60)
+            st.caption(f"🔄 Próximo refresh: {minutes:02d}:{seconds:02d}")
+        else:
+            st.caption("🔄 Atualizando...")
+    
+    # AUTO-REFRESH A CADA 120 SEGUNDOS (2 minutos)
+    # Força atualização dos dados e da interface
+    current_time = time.time()
+    time_since_last_refresh = current_time - st.session_state.last_auto_refresh
+    
+    # Se passou 120 segundos (2 minutos), força refresh
+    if time_since_last_refresh >= 120:
+        # Limpa todos os caches
+        clear_access_cache()
+        if 'df_acesso_veiculos' in st.session_state:
+            del st.session_state['df_acesso_veiculos']
+        if 'access_records_cache' in st.session_state:
+            del st.session_state['access_records_cache']
+        
+        # Atualiza timestamp
+        st.session_state.last_auto_refresh = time.time()
+        st.session_state.force_data_reload = True
+        
+        # Log do refresh automático
+        logging.info("🔄 Auto-refresh de 120s executado - dados atualizados")
+        
+        # Força rerun para atualizar interface
+        st.rerun()
+    
+    # Atualização rápida a cada 5 segundos apenas para o contador visual
+    # (não recarrega dados, só atualiza o timer na tela)
+    if 'last_timer_update' not in st.session_state:
+        st.session_state.last_timer_update = time.time()
+    
+    time_since_timer_update = current_time - st.session_state.last_timer_update
+    
+    # Atualiza contador visual a cada 5 segundos
+    if time_since_timer_update >= 5:
+        st.session_state.last_timer_update = time.time()
+        st.rerun()
+    
+    # Sistema de notificações com toasts
     if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
         popup = st.session_state.show_entry_popup
         # Verifica se já foi mostrado o toast (evita duplicação)
