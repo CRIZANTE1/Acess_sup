@@ -9,6 +9,7 @@ from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 import av
 import threading
 import time
+from datetime import datetime
 from app.supabase_db import SupabaseOperations
 from app.face_recognition_utils import (
     is_face_recognition_available,
@@ -111,7 +112,63 @@ def face_access_stream_page():
     col_status, col_actions = st.columns([2, 1])
     
     with col_status:
-        # POPOVER para entrada reconhecida (mais estável que banners)
+        # POPOVER para entrada reconhecida - VERIFICA DADOS APÓS RERUN
+        if st.session_state.get('pending_entry_verification'):
+            # Busca o último registro no banco para confirmar
+            try:
+                person_id = st.session_state.pending_entry_verification.get('person_id')
+                person_name = st.session_state.pending_entry_verification.get('person_name')
+                
+                # Busca registros recentes desta pessoa
+                access_records = db_ops.load_access_records()
+                today = get_sao_paulo_time().date()
+                
+                # Filtra registros de hoje desta pessoa
+                recent_entry = None
+                for r in access_records:
+                    if r.get('person_id') == person_id or r.get('name', '').lower() == person_name.lower():
+                        record_date = r.get('data')
+                        # Verifica se é de hoje
+                        try:
+                            if isinstance(record_date, str):
+                                if '/' in record_date:
+                                    from datetime import datetime as dt
+                                    record_date_obj = dt.strptime(record_date, "%d/%m/%Y").date()
+                                else:
+                                    from datetime import datetime as dt
+                                    record_date_obj = dt.fromisoformat(record_date.split('T')[0]).date()
+                            else:
+                                record_date_obj = record_date
+                            
+                            if record_date_obj == today:
+                                # Pega o mais recente
+                                if not recent_entry or r.get('horario_entrada', '') > recent_entry.get('horario_entrada', ''):
+                                    recent_entry = r
+                        except Exception as e:
+                            logging.debug(f"Erro ao processar data de registro: {e}")
+                            pass
+                
+                # Se encontrou entrada recente, exibe popover
+                if recent_entry:
+                    popup_data = {
+                        'name': recent_entry.get('name', person_name),
+                        'time': recent_entry.get('horario_entrada', 'N/A'),
+                        'company': recent_entry.get('empresa', 'Não informada'),
+                        'timestamp': st.session_state.pending_entry_verification.get('timestamp', time.time())
+                    }
+                    
+                    # Marca como verificado e exibe
+                    st.session_state.show_entry_popup = popup_data
+                    del st.session_state['pending_entry_verification']
+                else:
+                    # Não encontrou ainda, aguarda próximo rerun
+                    st.info("⏳ Processando entrada...")
+                    
+            except Exception as e:
+                logging.error(f"Erro ao verificar entrada: {e}")
+                del st.session_state['pending_entry_verification']
+        
+        # Exibe popover se já verificado
         if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
             popup = st.session_state.show_entry_popup
             
@@ -132,12 +189,24 @@ def face_access_stream_page():
                     st.session_state.show_entry_popup = None
                     # Limpa cache de dados para próxima atualização
                     clear_access_cache()
+                    # RESETA flag de auto-start para reiniciar stream após rerun
+                    st.session_state.auto_start_attempted = False
                     st.rerun()
             
             # Mensagem visual abaixo do popover
             st.success(f"✅ Última entrada: **{popup['name']}** às {popup['time']}")
         
-        # POPOVER para pessoa NÃO reconhecida
+        # POPOVER para pessoa NÃO reconhecida - VERIFICA DADOS APÓS DETECÇÃO
+        elif st.session_state.get('pending_unknown_verification'):
+            # Verifica se ainda há frame capturado
+            if st.session_state.get('last_unknown_frame') is not None:
+                # Confirma que os dados estão prontos
+                st.session_state.show_unknown_popup = True
+                del st.session_state['pending_unknown_verification']
+            else:
+                # Frame foi perdido, cancela
+                del st.session_state['pending_unknown_verification']
+        
         elif 'show_unknown_popup' in st.session_state and st.session_state.show_unknown_popup:
             # Usa popover ao invés de banner
             with st.popover("🔴 ⚠️ **PESSOA NÃO RECONHECIDA** - Clique aqui", use_container_width=True):
@@ -169,6 +238,8 @@ def face_access_stream_page():
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
                         clear_access_cache()
+                        # RESETA flag de auto-start para reiniciar stream após rerun
+                        st.session_state.auto_start_attempted = False
                         st.rerun()
             
             # Mensagem visual abaixo do popover
@@ -339,7 +410,8 @@ def face_access_stream_page():
                             
                             # Marca que detectou pessoa desconhecida (ativa alerta)
                             if not st.session_state.get('unknown_popup_shown', False):
-                                st.session_state.show_unknown_popup = True
+                                # NOVO FLUXO: Marca como pendente de verificação
+                                st.session_state.pending_unknown_verification = True
                                 st.session_state.unknown_popup_shown = True
                                 st.session_state.needs_rerun = True
                                 face_state.last_unknown_time = current_time
@@ -469,6 +541,8 @@ def face_access_stream_page():
                         st.session_state.last_unknown_frame = None
                         st.session_state.last_unknown_embedding = None
                         clear_access_cache()
+                        # RESETA flag de auto-start para reiniciar stream após rerun
+                        st.session_state.auto_start_attempted = False
                         st.rerun()
                     
                     if submit_register:
@@ -547,6 +621,9 @@ def face_access_stream_page():
                                     st.session_state.last_unknown_embedding = None
                                     st.session_state.force_data_reload = True
                                     
+                                    # RESETA flag de auto-start para reiniciar stream após rerun
+                                    st.session_state.auto_start_attempted = False
+                                    
                                     time.sleep(1)
                                     st.rerun()
                                 else:
@@ -557,8 +634,8 @@ def face_access_stream_page():
             st.warning("Nenhuma imagem capturada. Aguarde detecção de pessoa não reconhecida.")
             st.session_state.show_quick_register = False
     
-    # Auto-refresh para atualizar popovers quando houver novos registros
-    # Verifica a cada 2 segundos se há novas notificações pendentes
+    # Auto-refresh para verificar e atualizar popovers quando houver novos registros
+    # Verifica a cada 2 segundos se há verificações pendentes
     if 'last_refresh_check' not in st.session_state:
         st.session_state.last_refresh_check = time.time()
     
@@ -569,10 +646,17 @@ def face_access_stream_page():
     if time_since_check > 2:
         st.session_state.last_refresh_check = current_time
         
+        # PRIORIDADE: Se há verificações pendentes, força rerun
+        if (st.session_state.get('pending_entry_verification') or 
+            st.session_state.get('pending_unknown_verification')):
+            # Só faz rerun se o webrtc está ativo
+            if webrtc_ctx and webrtc_ctx.state.playing:
+                st.rerun()
+        
         # Se há popup pendente mas ainda não foi exibido, força rerun
-        if (st.session_state.get('show_entry_popup') or 
-            st.session_state.get('show_unknown_popup') or 
-            st.session_state.get('last_access_message')):
+        elif (st.session_state.get('show_entry_popup') or 
+              st.session_state.get('show_unknown_popup') or 
+              st.session_state.get('last_access_message')):
             
             # Só faz rerun se o webrtc está ativo (para não interferir com inicialização)
             if webrtc_ctx and webrtc_ctx.state.playing:
@@ -660,6 +744,9 @@ def face_access_stream_page():
                                     "EXIT_REGISTERED_STREAM",
                                     f"Saída registrada manualmente via stream para '{person_name}' (ID: {person_id})"
                                 )
+                                
+                                # RESETA flag de auto-start para reiniciar stream após rerun
+                                st.session_state.auto_start_attempted = False
                                 
                                 time.sleep(1)
                                 st.rerun()
@@ -852,25 +939,34 @@ def register_access_async(person, distance, db_ops, face_state):
         )
         
         if success:
-            # Salva notificação popup para exibir (PRIORIDADE)
-            entry_data = {
-                'name': person_name,
-                'time': now.strftime("%H:%M"),
-                'company': empresa if empresa else 'Não informada',
-                'timestamp': time.time()  # Para forçar atualização única
+            # NOVO FLUXO: Marca entrada como pendente de verificação
+            # O popover será exibido APÓS verificar os dados no banco
+            verification_data = {
+                'person_id': person_id,
+                'person_name': person_name,
+                'timestamp': time.time()
             }
             
-            # CRÍTICO: Configura popup ANTES de qualquer outra operação
-            st.session_state.show_entry_popup = entry_data
+            # Marca como pendente de verificação (será verificado após rerun)
+            st.session_state.pending_entry_verification = verification_data
             
             # Limpa mensagens antigas que podem interferir
             if 'last_access_message' in st.session_state:
                 del st.session_state['last_access_message']
+            if 'show_entry_popup' in st.session_state:
+                del st.session_state['show_entry_popup']
             
             # Adiciona ao histórico de entradas (mantém últimas 10)
             if 'entry_history' not in st.session_state:
                 st.session_state.entry_history = []
+            
+            entry_data = {
+                'name': person_name,
+                'time': now.strftime("%H:%M"),
+                'company': empresa if empresa else 'Não informada'
+            }
             st.session_state.entry_history.append(entry_data)
+            
             # Limita a 10 entradas
             if len(st.session_state.entry_history) > 10:
                 st.session_state.entry_history = st.session_state.entry_history[-10:]
@@ -889,12 +985,12 @@ def register_access_async(person, distance, db_ops, face_state):
                 if key in st.session_state:
                     del st.session_state[key]
             
-            # Força flag de atualização para recarregar dados E mostrar popover
+            # Força flag de atualização para recarregar dados
             st.session_state.force_data_reload = True
             st.session_state.needs_rerun = True
             
             # Log para debug
-            logging.info(f"✅ Popover configurado para {person_name} - timestamp: {entry_data['timestamp']}")
+            logging.info(f"✅ Entrada registrada para {person_name} - aguardando verificação pós-rerun")
         else:
             # Salva erro em session_state
             st.session_state.last_access_message = {
