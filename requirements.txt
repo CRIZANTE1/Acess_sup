@@ -12,14 +12,16 @@ sendgrid==6.11.0
 python-dotenv==1.0.0
 supabase>=2.8.1
 gotrue>=2.8.1
-# Dependências para DeepFace (ordem importante)
+# Dependências para InsightFace (Arquitetura Campeã para Streamlit Cloud)
 numpy>=1.26.0,<2.0
 Pillow>=10.1.0
 # OpenCV Headless - não requer OpenGL (resolve erro libGL.so.1 em ambientes headless)
 opencv-python-headless>=4.8.0
-# TensorFlow e Keras - versões compatíveis com DeepFace
-# Nota: DeepFace 0.0.79 tem problemas com TensorFlow 2.15+ devido a mudanças no Keras
-# Solução: usar TensorFlow 2.13 ou 2.14 que são mais estáveis com DeepFace
-tensorflow>=2.13.0,<2.15.0
-# DeepFace - versão fixa que funciona com TensorFlow 2.13/2.14
-deepface==0.0.79
+# InsightFace - Biblioteca otimizada para CPU com ArcFace (SOTA)
+insightface>=0.7.3
+# ONNX Runtime - Engine otimizado para CPU (NÃO use onnxruntime-gpu no Streamlit Cloud)
+onnxruntime>=1.16.0
+# Streamlit WebRTC - Para captura de vídeo em tempo real
+streamlit-webrtc>=0.47.0
+# AioRTC - Dependência do streamlit-webrtc
+aiortc>=1.6.0

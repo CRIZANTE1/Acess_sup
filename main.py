@@ -15,16 +15,6 @@ from app.security import SessionSecurity
 st.set_page_config(page_title="Controle de Acesso BAERI", layout="wide")
 
 def main():
-    # Verifica se é acesso público via query parameter
-    # Acesso: http://localhost:8501/?public=true
-    public_access = st.query_params.get("public", "false").lower() == "true"
-    
-    if public_access:
-        # Página pública de acesso por foto - SEM LOGIN
-        from app.public_face_access import public_face_access_page
-        public_face_access_page()
-        return
-    
     # Inicializa segurança de sessão
     SessionSecurity.init_session_security()
     
@@ -79,15 +69,15 @@ def main():
         
         page_options = []
         if user_role == 'admin':
-            page_options.extend(["Acesso por Foto", "Controle de Acesso", "Agendar Visita", "Cadastro de Pessoas", "Painel Administrativo", "Resumo"])
+            page_options.extend(["🎥 Monitoramento de Acesso (Stream)", "Controle de Acesso", "Agendar Visita", "Cadastro de Pessoas", "Painel Administrativo", "Resumo"])
         elif user_role == 'operacional':
-            page_options.extend(["Acesso por Foto", "Controle de Acesso", "Cadastro de Pessoas", "Resumo"])
+            page_options.extend(["🎥 Monitoramento de Acesso (Stream)", "Controle de Acesso", "Cadastro de Pessoas", "Resumo"])
         
         page = st.sidebar.selectbox("Escolha a página:", page_options)
         
-        if page == "Acesso por Foto":
-            from app.face_access_page import face_access_page
-            face_access_page()
+        if page == "🎥 Monitoramento de Acesso (Stream)":
+            from app.face_access_stream import face_access_stream_page
+            face_access_stream_page()
         elif page == "Controle de Acesso":
             vehicle_access_interface()
         elif page == "Agendar Visita":

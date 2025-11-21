@@ -24,7 +24,7 @@ def face_access_page():
     
     if not is_face_recognition_available():
         from app.face_recognition_utils import (
-            DEEPFACE_AVAILABLE, CV2_AVAILABLE, 
+            INSIGHTFACE_AVAILABLE, CV2_AVAILABLE, 
             NUMPY_AVAILABLE, PIL_AVAILABLE
         )
         
@@ -35,15 +35,15 @@ def face_access_page():
             missing.append("Pillow")
         if not CV2_AVAILABLE:
             missing.append("opencv-python-headless")
-        if not DEEPFACE_AVAILABLE:
-            missing.append("deepface")
+        if not INSIGHTFACE_AVAILABLE:
+            missing.append("insightface")
         
         error_msg = "⚠️ **Bibliotecas de reconhecimento facial não estão instaladas.**\n\n"
         if missing:
             error_msg += f"**Bibliotecas faltando:** {', '.join(missing)}\n\n"
         error_msg += "**Para instalar, execute:**\n\n"
         error_msg += "```bash\n"
-        error_msg += "pip install deepface opencv-python-headless tensorflow numpy Pillow\n"
+        error_msg += "pip install insightface onnxruntime opencv-python-headless numpy Pillow\n"
         error_msg += "```\n\n"
         error_msg += "**Ou instale todas as dependências:**\n\n"
         error_msg += "```bash\n"
@@ -364,6 +364,6 @@ def face_access_page():
         - **Distância:** Rosto ocupando boa parte da foto (não muito longe)
         - **Único rosto:** Apenas uma pessoa na foto
         
-        **Nota:** O sistema usa Google FaceNet, que é muito preciso, mas precisa de fotos de qualidade similar às cadastradas.
+        **Nota:** O sistema usa InsightFace com ArcFace (buffalo_s), que é muito preciso e otimizado para CPU, mas precisa de fotos de qualidade similar às cadastradas.
         """)
 
