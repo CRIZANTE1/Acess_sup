@@ -33,7 +33,7 @@ class FaceRecognitionState:
         self.last_recognized_person = None
         self.last_recognized_person_id = None  # ID da última pessoa reconhecida
         self.last_recognition_time = 0
-        self.last_unknown_time = 0  # Timestamp do último desconhecido
+        self.last_unknown_time = 0  # Timestamp do último desconhecido detectado
         self.recognition_cooldown = 30  # AUMENTADO: 30 segundos entre reconhecimentos (era 5)
         self.lock = threading.Lock()
         self.frame_count = 0
@@ -95,12 +95,43 @@ def face_access_stream_page():
     ---
     """)
     
-    # Área de status e últimas detecções
+    # Área de status e últimas detecções com POPOVERS
     col_status, col_actions = st.columns([2, 1])
     
     with col_status:
+        # POPOVER para entrada reconhecida (sempre visível quando há notificação)
+        if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
+            popup = st.session_state.show_entry_popup
+            
+            with st.popover("🟢 ✅ **ENTRADA REGISTRADA** - Clique para ver detalhes", use_container_width=True):
+                st.success(f"**{popup['name']}**")
+                st.info(f"🕐 **Horário:** {popup['time']}")
+                st.info(f"🏢 **Empresa:** {popup['company']}")
+                if st.button("✓ OK - Fechar", key=f"close_popup_{popup.get('timestamp', 0)}", use_container_width=True):
+                    st.session_state.show_entry_popup = None
+                    st.rerun()
+        
+        # POPOVER para pessoa NÃO reconhecida
+        elif 'show_unknown_popup' in st.session_state and st.session_state.show_unknown_popup:
+            with st.popover("🔴 ⚠️ **PESSOA NÃO RECONHECIDA** - Clique para ação", use_container_width=True):
+                st.warning("**Pessoa desconhecida detectada!**")
+                st.info("👤 Uma pessoa não cadastrada passou pela câmera")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button("📝 Cadastrar Agora", type="primary", use_container_width=True):
+                        st.session_state.show_quick_register = True
+                        st.session_state.show_unknown_popup = None
+                        st.rerun()
+                with col_b:
+                    if st.button("✓ Ignorar", use_container_width=True):
+                        st.session_state.show_unknown_popup = None
+                        st.session_state.last_unknown_frame = None
+                        st.session_state.last_unknown_embedding = None
+                        st.rerun()
+        
         # Exibe última mensagem de acesso (se houver)
-        if 'last_access_message' in st.session_state and st.session_state.last_access_message:
+        elif 'last_access_message' in st.session_state and st.session_state.last_access_message:
             msg = st.session_state.last_access_message
             msg_type = msg.get('type', 'info')
             title = msg.get('title', '')
@@ -135,6 +166,19 @@ def face_access_stream_page():
         
         if st.session_state.stream_paused:
             st.warning("⏸️ Reconhecimento pausado")
+        
+        # Histórico de últimas entradas (popover)
+        if 'entry_history' not in st.session_state:
+            st.session_state.entry_history = []
+        
+        if st.session_state.entry_history:
+            with st.popover("📋 Últimas Entradas", use_container_width=True):
+                st.markdown("### 📊 Histórico Recente")
+                for idx, entry in enumerate(st.session_state.entry_history[-5:]):
+                    st.success(f"✅ **{entry['name']}**")
+                    st.caption(f"🕐 {entry['time']} | 🏢 {entry['company']}")
+                    if idx < len(st.session_state.entry_history[-5:]) - 1:
+                        st.divider()
         
         # Área para cadastro rápido de última pessoa não reconhecida
         if 'last_unknown_frame' in st.session_state and st.session_state.last_unknown_frame is not None:
@@ -203,6 +247,12 @@ def face_access_stream_page():
                             }]
                             img = draw_face_boxes_on_frame(img, faces_info, show_names=True)
                             
+                            # Reseta popup de desconhecido (pessoa agora foi reconhecida)
+                            if 'unknown_popup_shown' in st.session_state:
+                                st.session_state.unknown_popup_shown = False
+                            if 'show_unknown_popup' in st.session_state:
+                                st.session_state.show_unknown_popup = None
+                            
                             # Registra acesso (em thread separada para não travar o vídeo)
                             # Salva informações no session_state para atualização posterior
                             threading.Thread(
@@ -219,11 +269,11 @@ def face_access_stream_page():
                             st.session_state.last_unknown_frame = img.copy()
                             st.session_state.last_unknown_embedding = detected_faces[0]['embedding']
                             
-                            # Marca que detectou pessoa desconhecida (para popup)
-                            if not st.session_state.get('unknown_already_shown', False):
+                            # Marca que detectou pessoa desconhecida (ativa popover)
+                            if not st.session_state.get('unknown_popup_shown', False):
                                 st.session_state.show_unknown_popup = True
-                                st.session_state.unknown_already_shown = True
-                                # Reseta flag após 10 segundos (permite novo alerta)
+                                st.session_state.unknown_popup_shown = True
+                                st.session_state.needs_rerun = True
                                 face_state.last_unknown_time = current_time
                             
                             # Desenha caixas vermelhas para rostos não reconhecidos
@@ -234,29 +284,15 @@ def face_access_stream_page():
                             } for face in detected_faces]
                             img = draw_face_boxes_on_frame(img, faces_info, show_names=True)
                         else:
-                            # Nenhum rosto detectado, reseta flag de unknown
+                            # Nenhum rosto detectado, reseta flag após 10 segundos
                             if current_time - getattr(face_state, 'last_unknown_time', 0) > 10:
-                                if 'unknown_already_shown' in st.session_state:
-                                    st.session_state.unknown_already_shown = False
+                                if 'unknown_popup_shown' in st.session_state:
+                                    st.session_state.unknown_popup_shown = False
         
         except Exception as e:
             st.error(f"Erro no processamento: {e}")
         
         return av.VideoFrame.from_ndarray(img, format="bgr24")
-    
-    # Exibe popup de entrada se houver
-    if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
-        popup = st.session_state.show_entry_popup
-        # Mostra popup com informações
-        st.toast(f"✅ ENTRADA REGISTRADA\n{popup['name']}\n{popup['time']} - {popup['company']}", icon="✅")
-        # Limpa popup após mostrar
-        st.session_state.show_entry_popup = None
-    
-    # Exibe popup de pessoa NÃO reconhecida se houver
-    if 'show_unknown_popup' in st.session_state and st.session_state.show_unknown_popup:
-        st.toast("⚠️ PESSOA NÃO RECONHECIDA\nCadastre rapidamente abaixo", icon="⚠️")
-        # Limpa popup após mostrar
-        st.session_state.show_unknown_popup = None
     
     # Stream de vídeo
     st.markdown("### 📹 Câmera de Reconhecimento Facial")
@@ -275,6 +311,29 @@ def face_access_stream_page():
         },
         async_processing=True,
     )
+    
+    # Exibe toast para notificações (reforço visual)
+    if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
+        popup = st.session_state.show_entry_popup
+        # Verifica se já foi mostrado o toast (evita duplicação)
+        if not st.session_state.get(f"toast_shown_{popup.get('timestamp', 0)}", False):
+            st.toast(f"✅ ENTRADA: {popup['name']} - {popup['time']}", icon="✅")
+            st.session_state[f"toast_shown_{popup.get('timestamp', 0)}"] = True
+    
+    if 'show_unknown_popup' in st.session_state and st.session_state.show_unknown_popup:
+        # Verifica se já foi mostrado o toast
+        if not st.session_state.get('unknown_toast_shown', False):
+            st.toast("⚠️ PESSOA NÃO RECONHECIDA - Clique no aviso acima", icon="⚠️")
+            st.session_state.unknown_toast_shown = True
+    else:
+        # Reseta flag quando popup é fechado
+        if 'unknown_toast_shown' in st.session_state:
+            st.session_state.unknown_toast_shown = False
+    
+    # Força rerun se necessário (para atualizar popovers)
+    if st.session_state.get('needs_rerun', False):
+        st.session_state.needs_rerun = False
+        st.rerun()
     
     # Formulário de cadastro rápido (se solicitado)
     if st.session_state.get('show_quick_register', False):
@@ -333,10 +392,10 @@ def face_access_stream_page():
                             # Cria pessoa no banco
                             new_person_id = db_ops.create_person(
                                 name=quick_name.strip(),
-                                cpf=formatted_cpf,
-                                company=quick_company.strip() if quick_company else None,
+                                cpf=formatted_cpf if formatted_cpf else "",
+                                company=quick_company.strip() if quick_company else "",
                                 face_encoding=encoding_json,
-                                face_photo_url=None
+                                face_photo_url=""
                             )
                             
                             if new_person_id:
@@ -459,7 +518,7 @@ def face_access_stream_page():
                             
                             # Atualiza registro
                             from app.data_operations import update_exit_time
-                            success = update_exit_time(person_id, horario_saida)
+                            success = update_exit_time(record_id=person_id, exit_time_str=horario_saida)
                             
                             if success:
                                 st.success(f"✅ Saída registrada para {person_name} às {horario_saida}")
@@ -678,17 +737,22 @@ def register_access_async(person, distance, db_ops, face_state):
 ⏱️ **Próximo registro:** Após {face_state.recognition_cooldown} segundos"""
             }
             
-            # Salva notificação popup para exibir (SEMPRE cria novo)
-            st.session_state.show_entry_popup = {
+            # Salva notificação popup para exibir
+            entry_data = {
                 'name': person_name,
                 'time': now.strftime("%H:%M"),
                 'company': empresa if empresa else 'Não informada',
-                'timestamp': time.time()  # Timestamp único para garantir atualização
+                'timestamp': time.time()  # Para forçar atualização
             }
+            st.session_state.show_entry_popup = entry_data
             
-            # Reseta flag de unknown para permitir novos alertas
-            if 'unknown_already_shown' in st.session_state:
-                st.session_state.unknown_already_shown = False
+            # Adiciona ao histórico de entradas (mantém últimas 10)
+            if 'entry_history' not in st.session_state:
+                st.session_state.entry_history = []
+            st.session_state.entry_history.append(entry_data)
+            # Limita a 10 entradas
+            if len(st.session_state.entry_history) > 10:
+                st.session_state.entry_history = st.session_state.entry_history[-10:]
             
             log_action(
                 "FACE_ACCESS_STREAM_GRANTED",
