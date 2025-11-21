@@ -227,6 +227,13 @@ def face_access_stream_page():
         
         return av.VideoFrame.from_ndarray(img, format="bgr24")
     
+    # Exibe popup de entrada se houver
+    if 'show_entry_popup' in st.session_state and st.session_state.show_entry_popup:
+        popup = st.session_state.show_entry_popup
+        st.toast(f"✅ {popup['name']} entrou às {popup['time']}", icon="✅")
+        # Limpa popup após mostrar
+        st.session_state.show_entry_popup = None
+    
     # Stream de vídeo
     st.markdown("### 📹 Câmera de Reconhecimento Facial")
     
@@ -550,6 +557,13 @@ def register_access_async(person, distance, db_ops, face_state):
 **Similaridade:** {(1 - distance) * 100:.1f}%
 
 ⏱️ **Próximo registro:** Após {face_state.recognition_cooldown} segundos"""
+            }
+            
+            # Salva notificação popup para exibir
+            st.session_state.show_entry_popup = {
+                'name': person_name,
+                'time': now.strftime("%H:%M"),
+                'company': empresa if empresa else 'Não informada'
             }
             
             log_action(
