@@ -19,6 +19,10 @@ from auth.auth_utils import get_user_display_name
 
 def person_registration_page():
     """Página para cadastro de pessoas com foto para reconhecimento facial"""
+    
+    # Marca que está na página de cadastro
+    st.session_state.last_page = 'cadastro_pessoas'
+    
     st.title("📸 Cadastro de Pessoas com Reconhecimento Facial")
     
     if not is_face_recognition_available():

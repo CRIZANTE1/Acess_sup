@@ -432,6 +432,27 @@ def process_exit_without_material(person_name, record_id):
 
 def vehicle_access_interface():
     """Renderiza a interface principal de controle de acesso."""
+    
+    # LIMPA CACHE E FORÇA RELOAD DOS DADOS AO ENTRAR NA PÁGINA
+    if 'last_page' not in st.session_state or st.session_state.last_page != 'controle_acesso':
+        # Primeira vez entrando nesta página ou voltando de outra
+        from app.utils import clear_access_cache
+        
+        # Limpa todos os caches
+        clear_access_cache()
+        if 'df_acesso_veiculos' in st.session_state:
+            del st.session_state['df_acesso_veiculos']
+        if 'access_records_cache' in st.session_state:
+            del st.session_state['access_records_cache']
+        if 'last_cache_update' in st.session_state:
+            del st.session_state['last_cache_update']
+        
+        # Marca que está nesta página
+        st.session_state.last_page = 'controle_acesso'
+        
+        # Recarrega dados do zero
+        load_data_from_supabase()
+    
     st.title("Controle de Acesso BAERI")
     
     # NOVO: Limpa estados órfãos ao carregar a página

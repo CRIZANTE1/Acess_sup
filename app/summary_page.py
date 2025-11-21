@@ -87,6 +87,20 @@ def consulta_nome_mes(selected_month=None, selected_year=None):
                 st.dataframe(df_exibir, hide_index=True, use_container_width=True)
 
 def summary_page():
+    # LIMPA CACHE E FORÇA RELOAD DOS DADOS AO ENTRAR NA PÁGINA
+    if 'last_page' not in st.session_state or st.session_state.last_page != 'resumo':
+        from app.utils import clear_access_cache
+        
+        # Limpa todos os caches
+        clear_access_cache()
+        if 'df_acesso_veiculos' in st.session_state:
+            del st.session_state['df_acesso_veiculos']
+        if 'access_records_cache' in st.session_state:
+            del st.session_state['access_records_cache']
+        
+        # Marca que está nesta página
+        st.session_state.last_page = 'resumo'
+    
     st.title("Resumo do Controle de Acesso")
     st.write("Aqui você pode visualizar um resumo dos dados de acesso de veículos.")
 

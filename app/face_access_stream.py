@@ -41,6 +41,10 @@ class FaceRecognitionState:
 
 def face_access_stream_page():
     """Página de monitoramento de acesso com stream de vídeo em tempo real"""
+    
+    # Marca que está na página de stream
+    st.session_state.last_page = 'stream'
+    
     st.title("🎥 Monitoramento de Acesso (Vídeo em Tempo Real)")
     st.markdown("### Sistema Automático - Monitoramento Contínuo")
     
