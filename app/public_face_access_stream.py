@@ -18,6 +18,7 @@ from app.face_recognition_utils import (
 )
 from app.data_operations import can_register_new_entry
 from app.utils import get_sao_paulo_time, clear_access_cache
+from app.logger import log_system_action
 import logging
 
 logging.basicConfig(level=logging.ERROR)
@@ -157,6 +158,19 @@ def public_face_access_stream_page():
                         detected_faces = process_video_frame(img)
                         
                         if detected_faces:
+                            # REGISTRA LOG de pessoa não identificada (apenas uma vez por detecção)
+                            if not hasattr(face_state, 'last_unknown_log_time'):
+                                face_state.last_unknown_log_time = 0
+                            
+                            # Registra log apenas a cada 30 segundos (evita spam)
+                            if current_time - face_state.last_unknown_log_time > 30:
+                                now = get_sao_paulo_time()
+                                log_system_action(
+                                    "UNKNOWN_PERSON_DETECTED_PUBLIC",
+                                    f"Pessoa não identificada detectada no acesso público em {now.strftime('%d/%m/%Y %H:%M:%S')} (Confidence: {detected_faces[0]['confidence']:.2f})"
+                                )
+                                face_state.last_unknown_log_time = current_time
+                            
                             faces_info = [{
                                 'bbox': face['bbox'],
                                 'name': 'Não Cadastrado',

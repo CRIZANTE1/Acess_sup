@@ -18,7 +18,7 @@ from app.face_recognition_utils import (
 )
 from app.data_operations import add_record, can_register_new_entry
 from app.utils import get_sao_paulo_time, clear_access_cache
-from app.logger import log_action
+from app.logger import log_action, log_system_action
 from auth.auth_utils import get_user_display_name
 import logging
 
@@ -157,6 +157,13 @@ def face_access_stream_page():
                         st.rerun()
                 with col_b:
                     if st.button("✓ Ignorar", key="ignore_unknown", use_container_width=True):
+                        # Registra que a pessoa não identificada foi ignorada
+                        now = get_sao_paulo_time()
+                        log_system_action(
+                            "UNKNOWN_PERSON_IGNORED",
+                            f"Pessoa não identificada foi ignorada pelo operador em {now.strftime('%d/%m/%Y %H:%M:%S')}"
+                        )
+                        
                         # Limpa popup e dados temporários, mantém stream ativo
                         st.session_state.show_unknown_popup = None
                         st.session_state.last_unknown_frame = None
@@ -336,6 +343,13 @@ def face_access_stream_page():
                                 st.session_state.unknown_popup_shown = True
                                 st.session_state.needs_rerun = True
                                 face_state.last_unknown_time = current_time
+                                
+                                # REGISTRA LOG de pessoa não identificada
+                                now = get_sao_paulo_time()
+                                log_system_action(
+                                    "UNKNOWN_PERSON_DETECTED",
+                                    f"Pessoa não identificada detectada no stream em {now.strftime('%d/%m/%Y %H:%M:%S')} (Confidence: {detected_faces[0]['confidence']:.2f})"
+                                )
                             
                             # Desenha caixas vermelhas para rostos não reconhecidos
                             faces_info = [{
@@ -513,9 +527,15 @@ def face_access_stream_page():
                                 
                                 if success:
                                     st.success(f"✅ **{quick_name.strip()} cadastrado(a) e acesso liberado!**")
+                                    
+                                    # Registra tanto o cadastro rápido quanto a resolução da pessoa desconhecida
                                     log_action(
                                         "FACE_STREAM_QUICK_REGISTER",
                                         f"Cadastro rápido via stream: '{quick_name.strip()}' (ID: {new_person_id})"
+                                    )
+                                    log_system_action(
+                                        "UNKNOWN_PERSON_REGISTERED",
+                                        f"Pessoa não identificada foi cadastrada como '{quick_name.strip()}' (ID: {new_person_id}) pelo operador"
                                     )
                                     
                                     # Limpa caches
